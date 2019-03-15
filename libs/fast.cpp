@@ -1,0 +1,197 @@
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+#include <vector>
+#include <queue>
+
+
+namespace py = pybind11;
+
+
+struct Pair {
+		Pair() {}
+    Pair(int16_t f_, int16_t s_) {
+        f = f_;
+        s = s_;
+    }
+    int16_t f;
+    int16_t s;
+};
+
+
+void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vector<int32_t>& texta,
+									 std::vector<int32_t>& textb) {
+	auto buf = array.request();
+	int32_t* ptr = (int32_t*) buf.ptr;
+	int32_t numr = array.shape()[0], numc = array.shape()[1];
+	if (numr > 32000 || numc > 32000) throw std::runtime_error("Input array too large!");
+	int16_t i = numr - 1, j = numc - 1;
+	int32_t maxlen = numr + numc;
+	std::queue< std::vector<Pair>> paths_to_explore;
+	std::vector<Pair> bestpath;
+	std::vector<Pair> path;
+	int32_t best_continuous_match_len = -1;
+	path.reserve(maxlen);
+	path.push_back(Pair(i, j));
+	int32_t max_paths_explore = 30000;
+	int32_t paths_found = 0;
+	while (true) {
+		if (i == 0 && j == 0) {
+			int32_t path_len = path.size();
+			int32_t startidx = -1, endidx = -1;
+			for(int32_t n = 1; n < path_len; n++) {
+				Pair& pair = path[n];
+				if (pair.f + 1 == path[n-1].f && pair.s + 1 == path[n-1].s) {
+					if (startidx == -1) startidx = n;
+					endidx = n;
+				}
+			}
+			int32_t continuous_match_len = endidx - startidx;
+//			std::cout << continuous_match_len <<  std::endl;
+			if (bestpath.size() == 0  || continuous_match_len < best_continuous_match_len) {
+				best_continuous_match_len = continuous_match_len;
+				bestpath = path;
+			}
+			if (paths_to_explore.size() == 0) break;
+			path = paths_to_explore.front();
+			Pair& p = path.back();
+			i = p.f, j = p.s;
+			paths_to_explore.pop();
+		}
+		int32_t upc, leftc, diagc;
+		int8_t idx = -1;
+		if (i == 0) {
+		  idx = 1;
+		} else if (j == 0) {
+		  idx = 0;
+		} else {
+			upc = ptr[(i-1)*numc + j];
+			leftc = ptr[i*numc + j - 1];
+			diagc = ptr[(i-1)*numc + j - 1];
+		}
+		if (idx != -1) {
+			;
+		} else if (diagc < leftc && diagc < upc) {
+			idx = 2;
+		} else if (upc < leftc && upc != diagc && (texta[i] != textb[j] || upc + 1 < diagc)) {
+			idx = 0;
+		} else if (leftc < upc && leftc != diagc && (texta[i] != textb[j] || leftc + 1 < diagc)) {
+		  idx = 1;
+		} else {
+
+			if (leftc == diagc && upc == diagc) {
+				idx = 2;
+			} else if (leftc == upc) {
+				if (leftc + 1 != diagc) {
+					throw std::runtime_error("Should not be possible B");
+				} else {
+				  if (paths_found < max_paths_explore) {
+						std::vector<Pair> pathcopied(path);
+						Pair explorep(i, j - 1);
+						pathcopied.push_back(explorep);
+						paths_to_explore.push(pathcopied);
+
+						pathcopied = path;
+						explorep = Pair(i - 1, j);
+						pathcopied.push_back(explorep);
+						paths_to_explore.push(pathcopied);
+						paths_found++;
+					}
+
+					idx = 2;
+				}
+			} else if (leftc + 1 == diagc) {
+				if (paths_found < max_paths_explore) {
+					std::vector<Pair> pathcopied(path);
+					Pair explorep(i, j - 1);
+					pathcopied.push_back(explorep);
+					paths_to_explore.emplace(pathcopied);
+					paths_found++;
+				}
+				idx = 2;
+			} else if (upc + 1 == diagc) {
+				if (paths_found < max_paths_explore) {
+					std::vector<Pair> pathcopied(path);
+					Pair explorep(i - 1, j);
+					pathcopied.push_back(explorep);
+					paths_to_explore.emplace(pathcopied);
+					paths_found++;
+				}
+				idx = 2;
+			} else if (diagc <= upc && diagc <= leftc) {
+				idx = 2;
+			} else {
+				throw std::runtime_error("Should not be possible C " + std::to_string(leftc) + " " + std::to_string(upc) + " " + std::to_string(diagc));
+			}
+		}
+
+		if (idx == 0) {
+			i--;
+		} else if (idx == 1) {
+			j--;
+		} else {
+			i--, j--;
+		}
+		Pair newp = Pair(i, j);
+		path.push_back(newp);
+	}
+	if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
+	for(int32_t k = 0; k < bestpath.size(); k++) {
+		bestpath_lst.append(bestpath[k].f);
+		bestpath_lst.append(bestpath[k].s);
+	}
+}
+
+
+py::object calc_sum_cost(py::array_t<int32_t> array, std::vector<int32_t>& texta, std::vector<int32_t>& textb) {
+	if ( array.ndim() != 2 )
+    throw std::runtime_error("Input should be 2-D NumPy array");
+
+  int M = array.shape()[0], N = array.shape()[1];
+  if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
+  auto buf = array.request();
+  int32_t* ptr = (int32_t*) buf.ptr;
+
+  for(int32_t i = 0; i < M; i++) {
+		for(int32_t j = 0; j < N; j++) {
+			int32_t elem_cost = 2;
+		  if (texta[i] == textb[j]) elem_cost = 1;
+
+			if (i == 0) {
+				if (j == 0) {
+					ptr[0] = 0;
+				} else if (j == 1) {
+					ptr[j] = 1;
+				} else {
+					ptr[j] = elem_cost + ptr[j - 1];
+				}
+			} else if (j == 0) {
+				if (i == 1) {
+					ptr[i * N] = 1;
+				} else {
+					ptr[i * N] = elem_cost + ptr[(i - 1) * N];
+				}
+			} else {
+				int32_t upc = ptr[(i-1) * N + j];
+		    int32_t leftc = ptr[i * N + j - 1];
+			  int32_t diagc = ptr[(i-1) * N + j - 1];
+			  int32_t transition_cost = std::min(upc, std::min(leftc, diagc));
+				if (diagc < leftc && diagc < upc) {
+					if (elem_cost == 2) elem_cost = 4;
+					transition_cost += elem_cost;
+				} else {
+					transition_cost += 2;
+				}
+		    ptr[i * N + j] = transition_cost;
+			}
+    }
+  }
+  return py::cast<py::none>(Py_None);
+}
+
+
+PYBIND11_MODULE(fast,m) {
+  m.doc() = "pybind11 plugin";
+  m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
+  m.def("get_best_path", &get_best_path, "get_best_path");
+}
