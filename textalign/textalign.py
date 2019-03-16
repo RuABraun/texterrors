@@ -179,7 +179,6 @@ def main(
     fpath_a: "File A with text",
     fpath_b: "File B with text",
     debug: ("Print debug messages", "flag", "d"),
-    isnum: ("Text is already in integer format", "option") = False,
 ):
 
     if debug:
@@ -196,19 +195,19 @@ def main(
         textb = fh.read().split()
 
     dct = {'<eps>': 0}
-    if not isnum:
-        all_text = texta + textb
-        set_words = set(all_text)
-        for i, w in enumerate(set_words):
-            dct[w] = i + 1
-        texta = [dct[w] for w in texta]
-        textb = [dct[w] for w in textb]
-    else:
-        texta = [int(w) for w in texta]
-        textb = [int(w) for w in textb]
+    all_text = texta + textb
+    set_words = set(all_text)
+    for i, w in enumerate(set_words):
+        dct[w] = i + 1
+    texta = [dct[w] for w in texta]
+    textb = [dct[w] for w in textb]
+
     dct.update({v: k for k, v in dct.items()})
 
     aligned_a, aligned_b = align_texts(texta, textb)
+    # with open('out', 'w') as fh:
+    #     for e1, e2 in zip(aligned_a, aligned_b):
+    #         fh.write(f"{i2w[e1]} {i2w[e2]}\n")
     if debug:
         print([dct[w] for w in aligned_a])
         print([dct[w] for w in aligned_b])
