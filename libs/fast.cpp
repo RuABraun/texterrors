@@ -32,7 +32,6 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	for(int i = 0; i < numr; i++) {
 		int val = ptr[i*numc + numc - 1];
 		if (val > maxreward) {
-//			std::cout << i << " " << val << std::endl;
 			maxreward = val;
 			bestpoint = Pair(i, numc-1);
 		}
@@ -40,14 +39,13 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	for(int j = 0; j < numc; j++) {
 		int val = ptr[(numr-1)*numc + j];
 		if (val > maxreward) {
-//			std::cout << j << " " << val << std::endl;
 			maxreward = val;
 			bestpoint = Pair(numr-1, j);
 		}
 	}
 
 	if (numr > 32000 || numc > 32000) throw std::runtime_error("Input array too large!");
-	std::cout << bestpoint.i << " " << bestpoint.j << std::endl;
+//	std::cout << bestpoint.i << " " << bestpoint.j << std::endl;
 	int16_t i = bestpoint.i, j = bestpoint.j;
 	std::queue< std::vector<Pair>> paths_to_explore;
 	std::vector<Pair> bestpath;
@@ -70,7 +68,7 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 				}
 			}
 			int32_t continuous_match_len = endidx - startidx;
-			std::cout << continuous_match_len <<  std::endl;
+//			std::cout << continuous_match_len <<  std::endl;
 			if (bestpath.size() == 0 || continuous_match_len < best_continuous_match_len) {
 				best_continuous_match_len = continuous_match_len;
 				bestpath = path;

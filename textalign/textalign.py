@@ -150,29 +150,43 @@ def get_best_align_subpart(text_long, text_short):
     return aligneds[bestidx]
 
 
-def align_texts(text_a, text_b, max_len_diff_ratio=2):
+def align_texts(text_a, text_b, insert_tok='<eps>', max_len_diff_ratio=2):
     """ If one text is a lot longer than the other will do try and align parts of text
         and then postprocess because there could be errors (because of limit on paths found).
     """
+    assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
+    isstr = False
+    if isinstance(text_a[0], str):
+        isstr = True
+        dct = {insert_tok: 0}
+        all_text = text_a + text_b
+        set_words = set(all_text)
+        for i, w in enumerate(set_words):
+            dct[w] = i + 1
+        text_a = [dct[w] for w in text_a]
+        text_b = [dct[w] for w in text_b]
+        dct.update({v: k for k, v in dct.items()})
+
     ratio = len(text_a) / len(text_b)
     if (ratio > max_len_diff_ratio or ratio < 1 / max_len_diff_ratio) and (
         len(text_a) > 1000 or len(text_b) > 1000
     ):
         if ratio > max_len_diff_ratio:
             aligned_a, aligned_b = get_best_align_subpart(text_a, text_b)
-            aligned_b = handle_outliers(aligned_b)
-            return aligned_a, aligned_b
+            # aligned_b = handle_outliers(aligned_b)
         if ratio < 1 / max_len_diff_ratio:
             aligned_b, aligned_a = get_best_align_subpart(text_b, text_a)
-            aligned_a = handle_outliers(aligned_a)
-            return aligned_a, aligned_b
+            # aligned_a = handle_outliers(aligned_a)
     else:
         aligned_a, aligned_b = _align_texts(text_a, text_b)
         # if len(text_a) < len(text_b):
         #     aligned_a = handle_outliers(aligned_a)
         # else:
         #     aligned_b = handle_outliers(aligned_b)
-        return aligned_a, aligned_b
+    if isstr:
+        aligned_a = [dct[e] for e in aligned_a]
+        aligned_b = [dct[e] for e in aligned_b]
+    return aligned_a, aligned_b
 
 
 def main(
