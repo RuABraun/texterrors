@@ -130,7 +130,7 @@ def get_best_align_subpart(text_long, text_short):
     if not indcs:
         # Assuming text_short is at the start of text_long but starts do not match
         indcs.append(0)
-    cover_dist = int(len(text_short) * 1.5)
+    cover_dist = int(len(text_short) * 2.5)
     bestnum = 1
     bestidx = -1
     aligneds = []
@@ -168,10 +168,10 @@ def align_texts(text_a, text_b, max_len_diff_ratio=2):
             return aligned_a, aligned_b
     else:
         aligned_a, aligned_b = _align_texts(text_a, text_b)
-        if len(text_a) < len(text_b):
-            aligned_a = handle_outliers(aligned_a)
-        else:
-            aligned_b = handle_outliers(aligned_b)
+        # if len(text_a) < len(text_b):
+        #     aligned_a = handle_outliers(aligned_a)
+        # else:
+        #     aligned_b = handle_outliers(aligned_b)
         return aligned_a, aligned_b
 
 
