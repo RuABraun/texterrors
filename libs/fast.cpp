@@ -25,7 +25,7 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	int32_t* ptr = (int32_t*) buf.ptr;
 	int32_t numr = array.shape()[0], numc = array.shape()[1];
 	int32_t maxlen = numr + numc;
-	// Find maximum value of reward matrix on last column or row. Use that point as start point of path
+	// (1) Find maximum value of reward matrix on last column or row. Use that point as start point of path
 	// (and later append with insert steps)
 	int maxreward = -maxlen;
 	Pair bestpoint(numr - 1, numc - 1);
@@ -155,18 +155,19 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 		path.push_back(newp);
 	}
 
+	// if necessary adding inserts as mentioned at (1)
 	if (bestpoint.i == numr - 1 && bestpoint.j != numc - 1) {
 		std::vector<Pair> toappend;
 		for(int j = bestpoint.j + 1; j < numc; j++) {
 			toappend.push_back(Pair(bestpoint.i, j));
 		}
-		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());
+		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());  // path is reversed so inserting
 	} else if (bestpoint.j == numc - 1 && bestpoint.i != numr - 1) {
 		std::vector<Pair> toappend;
 		for(int i = bestpoint.i + 1; i < numr; i++) {
 			toappend.push_back(Pair(i, bestpoint.j));
 		}
-		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());  // if the path were in right order append
+		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());
 	}
 
 	if (bestpath.size() == 1) throw std::runtime_error("No best path found!");

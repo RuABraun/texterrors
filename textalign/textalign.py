@@ -31,7 +31,7 @@ def _align_texts(text_a, text_b):
         j = best_path_lst[n + 1]
         path.append((i, j))
 
-    # convert hook (up left or left up) transitions to diag
+    # convert hook (up left or left up) transitions to diag, not important.
     # -1 because of padding tokens, i = 1 because first is given
     newpath = [path[0]]
     i = 1
@@ -120,16 +120,14 @@ def handle_outliers(aligned_short):
 def get_best_align_subpart(text_long, text_short):
     """ We know the first 2 words should match so find them in the long text and start from there """
     first_two_words = text_short[:2]
-    indcs = []
+    indcs = [0]  # Start of text can be different
     for i in range(len(text_long) - 1):
         if (
             first_two_words[0] == text_long[i]
             and first_two_words[1] == text_long[i + 1]
         ):
             indcs.append(i)
-    if not indcs:
-        # Assuming text_short is at the start of text_long but starts do not match
-        indcs.append(0)
+
     cover_dist = int(len(text_short) * 2.5)
     bestnum = 1
     bestidx = -1
