@@ -66,57 +66,6 @@ def _align_texts(text_a, text_b):
     return aligned_a, aligned_b
 
 
-def handle_outliers(aligned_short):
-    startidx, endidx = -1, -1
-    realstartidx, realendidx = -1, -1
-    for i, w in enumerate(aligned_short):
-        if w != 0:
-            if startidx == -1:
-                startidx = i
-            endidx = i
-            cnt = 0
-            for nw in aligned_short[i + 1 : i + 10]:
-                if nw != 0:
-                    cnt += 1
-            if cnt > 3:
-                if realstartidx == -1:
-                    realstartidx = i
-            cnt = 0
-            for nw in aligned_short[i - 9 : i]:
-                if nw != 0:
-                    cnt += 1
-            if cnt > 3:
-                realendidx = i
-    if (
-        (realstartidx == startidx and realendidx == endidx)
-        or realstartidx == -1
-        or realendidx == -1
-    ):
-        return aligned_short
-
-    if realstartidx != startidx:
-        words_to_move_indcs = []
-        for i in range(realstartidx):
-            if aligned_short[i] != 0:
-                words_to_move_indcs.append(i)
-        offset = 1
-        for idx in reversed(words_to_move_indcs):
-            aligned_short[realstartidx - offset] = aligned_short[idx]
-            aligned_short[idx] = 0
-            offset += 1
-    if realendidx != endidx:
-        words_to_move_indcs = []
-        for i in range(realendidx + 1, len(aligned_short)):
-            if aligned_short[i] != 0:
-                words_to_move_indcs.append(i)
-        offset = 1
-        for idx in words_to_move_indcs:
-            aligned_short[realendidx + offset] = aligned_short[idx]
-            aligned_short[idx] = 0
-            offset += 1
-    return aligned_short
-
-
 def get_best_align_subpart(text_long, text_short):
     """ We know the first 2 words should match so find them in the long text and start from there """
     first_two_words = text_short[:2]
@@ -127,14 +76,17 @@ def get_best_align_subpart(text_long, text_short):
             and first_two_words[1] == text_long[i + 1]
         ):
             indcs.append(i)
+    if len(indcs) == 1:
+        for i in range(0, len(text_long)-1, len(text_short)):
+            indcs.append(i)
 
-    cover_dist = int(len(text_short) * 2.5)
+    cover_dist = int(len(text_short) * 3.0)
     bestnum = 1
     bestidx = -1
     aligneds = []
     j = 0
     for startidx in indcs:
-        textpart = text_long[startidx : startidx + cover_dist]
+        textpart = text_long[startidx: startidx + cover_dist]
         aligned_long, aligned_short = _align_texts(textpart, text_short)
         num = len(aligned_short) / (len(textpart) + len(text_short))
         # print(startidx, startidx + cover_dist, num)
@@ -171,16 +123,10 @@ def align_texts(text_a, text_b, insert_tok='<eps>', max_len_diff_ratio=2):
     ):
         if ratio > max_len_diff_ratio:
             aligned_a, aligned_b = get_best_align_subpart(text_a, text_b)
-            # aligned_b = handle_outliers(aligned_b)
         if ratio < 1 / max_len_diff_ratio:
             aligned_b, aligned_a = get_best_align_subpart(text_b, text_a)
-            # aligned_a = handle_outliers(aligned_a)
     else:
         aligned_a, aligned_b = _align_texts(text_a, text_b)
-        # if len(text_a) < len(text_b):
-        #     aligned_a = handle_outliers(aligned_a)
-        # else:
-        #     aligned_b = handle_outliers(aligned_b)
     if isstr:
         aligned_a = [dct[e] for e in aligned_a]
         aligned_b = [dct[e] for e in aligned_b]

@@ -3,6 +3,7 @@
 #include <pybind11/numpy.h>
 #include <vector>
 #include <queue>
+#include <iostream>
 
 
 namespace py = pybind11;
@@ -45,7 +46,6 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	}
 
 	if (numr > 32000 || numc > 32000) throw std::runtime_error("Input array too large!");
-//	std::cout << bestpoint.i << " " << bestpoint.j << std::endl;
 	int16_t i = bestpoint.i, j = bestpoint.j;
 	std::queue< std::vector<Pair>> paths_to_explore;
 	std::vector<Pair> bestpath;
@@ -53,7 +53,6 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	int32_t best_continuous_match_len = -1;
 	path.reserve(maxlen);
 	path.push_back(Pair(i, j));
-//	std::cout << i << " " << j << std::endl;
 	int32_t max_paths_explore = 30000;
 	int32_t paths_found = 0;
 	while (true) {
@@ -68,7 +67,6 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 				}
 			}
 			int32_t continuous_match_len = endidx - startidx;
-//			std::cout << continuous_match_len <<  std::endl;
 			if (bestpath.size() == 0 || continuous_match_len < best_continuous_match_len) {
 				best_continuous_match_len = continuous_match_len;
 				bestpath = path;
@@ -158,13 +156,13 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 	// if necessary adding inserts as mentioned at (1)
 	if (bestpoint.i == numr - 1 && bestpoint.j != numc - 1) {
 		std::vector<Pair> toappend;
-		for(int j = bestpoint.j + 1; j < numc; j++) {
+		for(int j = numc - 1; j >= bestpoint.j + 1; j--) {
 			toappend.push_back(Pair(bestpoint.i, j));
 		}
 		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());  // path is reversed so inserting
 	} else if (bestpoint.j == numc - 1 && bestpoint.i != numr - 1) {
 		std::vector<Pair> toappend;
-		for(int i = bestpoint.i + 1; i < numr; i++) {
+		for(int i = numr - 1; i >= bestpoint.i + 1; i--) {
 			toappend.push_back(Pair(i, bestpoint.j));
 		}
 		bestpath.insert(bestpath.begin(), toappend.begin(), toappend.end());
