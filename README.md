@@ -1,6 +1,6 @@
 # textalign
 
-For aligning two pieces of text with each other.
+For aligning two pieces of text with each other quickly.
 
 # Example
 
