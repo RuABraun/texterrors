@@ -92,11 +92,12 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                  use_chardiff=True):
     utt_to_text_ref = {}
-    utts = set()
+    utts = []
     with open(ref_f) as fh:
         for line in fh:
             utt, *words = line.split()
-            utts.add(utt)
+            assert utt not in utts, 'There are repeated utterances in reference file! Exiting'
+            utts.append(utt)
             utt_to_text_ref[utt] = words
 
     utt_to_text_hyp = {}
