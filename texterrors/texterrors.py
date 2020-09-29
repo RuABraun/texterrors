@@ -9,15 +9,17 @@ from termcolor import colored
 import Levenshtein as levd
 
 
-def _align_texts(text_a, text_b, debug=False):
+def _align_texts(text_a, text_b, text_a_str, text_b_str, use_chardiff, debug=False):
     len_a = len(text_a)
     len_b = len(text_b)
     # doing dynamic time warp
     text_a = [0] + text_a
     text_b = [0] + text_b
+    text_a_str = ['<eps>'] + text_a_str
+    text_b_str = ['<eps>'] + text_b_str
     # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.int32, order="C")
-    texterrors_align.calc_sum_cost(summed_cost, text_a, text_b)
+    cost = texterrors_align.calc_sum_cost(summed_cost, text_a_str, text_b_str, use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
@@ -63,32 +65,32 @@ def _align_texts(text_a, text_b, debug=False):
             aligned_b.append(0)
         lasti, lastj = i, j
 
-    return aligned_a, aligned_b
+    return aligned_a, aligned_b, cost
 
 
-def align_texts(text_a, text_b, debug, insert_tok='<eps>'):
+def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
     assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
-    isstr = False
-    if isinstance(text_a[0], str):
-        isstr = True
-        dct = {insert_tok: 0}
-        all_text = text_a + text_b
-        set_words = set(all_text)
-        for i, w in enumerate(set_words):
-            dct[w] = i + 1
-        text_a = [dct[w] for w in text_a]
-        text_b = [dct[w] for w in text_b]
-        dct.update({v: k for k, v in dct.items()})
+    assert isinstance(text_a[0], str)
 
-    aligned_a, aligned_b = _align_texts(text_a, text_b, debug)
-    if isstr:
-        aligned_a = [dct[e] for e in aligned_a]
-        aligned_b = [dct[e] for e in aligned_b]
-    return aligned_a, aligned_b
+    dct = {insert_tok: 0}
+    all_text = text_a + text_b
+    set_words = set(all_text)
+    for i, w in enumerate(set_words):
+        dct[w] = i + 1
+    text_a_int = [dct[w] for w in text_a]
+    text_b_int = [dct[w] for w in text_b]
+    dct.update({v: k for k, v in dct.items()})
+    aligned_a, aligned_b, cost = _align_texts(text_a_int, text_b_int, text_a, text_b, use_chardiff,
+                                        debug)
+
+    aligned_a = [dct[e] for e in aligned_a]
+    aligned_b = [dct[e] for e in aligned_b]
+    return aligned_a, aligned_b, cost
 
 
-def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False):
+def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
+                 use_chardiff=True):
     utt_to_text_ref = {}
     utts = set()
     with open(ref_f) as fh:
@@ -112,6 +114,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
     dels = defaultdict(int)
     subs = defaultdict(int)        
     total_count = 0
+    cost_total = 0
     word_counts = defaultdict(int)
     fh = open(outf, 'w')
     fh.write('Per utt details:\n')
@@ -121,7 +124,8 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
         if hyp is None:
             print(f'!\tMissing hyp for utt {utt}')
             continue
-        ref_aligned, hyp_aligned = align_texts(ref, hyp, debug)
+        ref_aligned, hyp_aligned, cost = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
+        cost_total += cost
         fh.write(f'{utt}\n')
         lst = []
         for ref_w, hyp_w in zip(ref_aligned, hyp_aligned):
@@ -157,7 +161,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
                 return lst
             char_ref = flatten_word_list(ref)
             char_hyp = flatten_word_list(hyp)
-            char_ref_aligned, char_hyp_aligned = align_texts(char_ref, char_hyp, debug)
+            char_ref_aligned, char_hyp_aligned, cost = align_texts(char_ref, char_hyp, debug, use_chardiff=False)
             for ref_c, hyp_c in zip(char_ref_aligned, char_hyp_aligned):
                 char_count += 1
                 if ref_c != hyp_c:
@@ -185,6 +189,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
 
     wer = (sum(ins.values()) + sum(dels.values()) + sum(subs.values())) / float(total_count)
     fh.write(f'\nWER: {100.*wer:.2f}\n\n')
+
     if cer:
         cer = char_error_count / float(char_count)
         fh.write(f'CER: {100.*cer:.2f}\n\n')
@@ -213,6 +218,7 @@ def main(
     isark: ('', 'flag', None)=False,
     cer: ('', 'flag', None)=False,
     debug: ("Print debug messages", "flag", "d")=False,
+    no_chardiff: ('', 'flag', None) = False
 ):
     oov_set = []
     if oov_list_f:
@@ -220,7 +226,8 @@ def main(
             for line in fh:
                 oov_set.append(line.split()[0])
         oov_set = set(oov_set)
-    process_arks(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set)
+    process_arks(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
+                 use_chardiff=not no_chardiff)
 
 
 if __name__ == "__main__":

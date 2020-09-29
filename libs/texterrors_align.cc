@@ -8,6 +8,7 @@
 
 namespace py = pybind11;
 
+typedef int32_t int32;
 
 struct Pair {
 		Pair() {}
@@ -18,6 +19,44 @@ struct Pair {
     int16_t i;
     int16_t j;
 };
+
+template <class T>
+void create_cost_mat(int32* cost_mat, const T* a, const T* b,
+                     const int32 M, const int32 N) {
+  for (int32 i = 0; i < M; ++i) {
+    for (int32 j = 0; j < N; ++j) {
+      int32 transition_cost = a[i] == b[j] ? 0 : 1;
+
+      if (i == 0 && j == 0) {
+        cost_mat[0] = 0;
+        continue;
+      }
+      if (i == 0) {
+        cost_mat[j] = cost_mat[j - 1] + transition_cost;
+        continue;
+      }
+      if (j == 0) {
+        cost_mat[i * N] = cost_mat[(i-1) * N] + transition_cost;
+        continue;
+      }
+
+      int32 upc = cost_mat[(i-1) * N + j] + transition_cost;
+      int32 leftc = cost_mat[i * N + j - 1] + transition_cost;
+      int32 diagc = cost_mat[(i-1) * N + j - 1] + 2 * transition_cost;
+      int32 cost = std::min(upc, std::min(leftc, diagc));
+      cost_mat[i * N + j] = cost;
+    }
+  }
+}
+
+
+int levdistance(const std::string& a, const std::string& b) {
+  int32 M = a.length();
+  int32 N = b.length();
+  std::vector<int32> cost_mat(M*N);
+  create_cost_mat(cost_mat.data(), a.data(), b.data(), M, N);
+  return cost_mat.back();
+}
 
 
 void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vector<int32_t>& texta,
@@ -133,8 +172,7 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
     } else {
       throw "WTF";
     }
-    Pair newp = Pair(i, j);
-    path.push_back(newp);
+    path.emplace_back(i, j);
 	}
 
 	if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
@@ -145,7 +183,8 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
 }
 
 
-py::object calc_sum_cost(py::array_t<int32_t> array, std::vector<int32_t>& texta, std::vector<int32_t>& textb) {
+int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
+                         std::vector<std::string>& textb, bool use_chardist) {
 	if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
 
@@ -156,8 +195,12 @@ py::object calc_sum_cost(py::array_t<int32_t> array, std::vector<int32_t>& texta
 
   for(int32_t i = 0; i < M; i++) {
 		for(int32_t j = 0; j < N; j++) {
-			int32_t transition_cost = 1;
-		  if (texta[i] == textb[j]) transition_cost = 0;
+      int32_t transition_cost;
+		  if (use_chardist) {
+        transition_cost = levdistance(texta[i], textb[j]);\
+      } else {
+        transition_cost = texta[i] == textb[j] ? 0 : 1;
+		  }
 
 		  if (i == 0 && j == 0) {
 		    ptr[0] = 0;
@@ -180,7 +223,7 @@ py::object calc_sum_cost(py::array_t<int32_t> array, std::vector<int32_t>& texta
       ptr[i * N + j] = sum;
     }
   }
-  return py::cast<py::none>(Py_None);
+  return ptr[(M-1) * (N-1)];
 }
 
 
