@@ -1,13 +1,15 @@
-# textalign
+# texterrors
 
-For aligning two pieces of text with each other quickly.
+For getting detailed WER / CER stats. 
+
+Colored output is based on the brilliant [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+
+# Installing
+```
+python -m pip install .
+```
+The package will be installed as `texterrors`.
+
 
 # Example
 
-```
->>> from textalign import textalign
->>> a = ['a', 'b', 'c', 'd', 'e']
->>> b = ['z', 'a', 'b', 'd', 'e']
->>> textalign.align_texts(a, b, insert_tok='-')
-(['-', 'a', 'b', 'c', 'd', 'e'], ['z', 'a', 'b', '-', 'd', 'e'])
-```

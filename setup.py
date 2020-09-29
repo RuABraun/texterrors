@@ -23,8 +23,8 @@ class get_pybind_include(object):
 
 ext_modules = [
     Extension(
-        "fast",
-        ["libs/fast.cpp"],
+        "texterrors_align",
+        ["libs/texterrors_align.cc"],
         include_dirs=[
             # Path to pybind11 headers
             get_pybind_include(),
@@ -88,14 +88,15 @@ class BuildExt(build_ext):
 
 
 setup(
-    name="textalign",
+    name="texterrors",
     version=__version__,
     author="Rudolf A Braun",
     author_email="rab014@gmail.com",
-    packages=["textalign"],
+    packages=["texterrors"],
     license="",
-    description="For aligning text",
+    description="For WER",
     long_description="BLABLA",
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExt},
+    scripts=['texterrors/texterrors.py']
 )
