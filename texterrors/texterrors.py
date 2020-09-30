@@ -9,6 +9,17 @@ from termcolor import colored
 import Levenshtein as levd
 
 
+def convert_to_int(insert_tok, lst_a, lst_b):
+    dct = {insert_tok: 0}
+    set_words = set()
+    for lst in (lst_a, lst_b):
+        set_words.update(lst)
+    for i, w in enumerate(set_words):
+        dct[w] = i + 1
+    dct.update({v: k for k, v in dct.items()})
+    return [dct[w] for w in lst_a], [dct[w] for w in lst_b], dct
+
+
 def _align_texts(text_a, text_b, text_a_str, text_b_str, use_chardiff, debug=False):
     len_a = len(text_a)
     len_b = len(text_b)
@@ -73,14 +84,7 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
     assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
     assert isinstance(text_a[0], str)
 
-    dct = {insert_tok: 0}
-    all_text = text_a + text_b
-    set_words = set(all_text)
-    for i, w in enumerate(set_words):
-        dct[w] = i + 1
-    text_a_int = [dct[w] for w in text_a]
-    text_b_int = [dct[w] for w in text_b]
-    dct.update({v: k for k, v in dct.items()})
+    text_a_int, text_b_int, dct = convert_to_int(insert_tok, text_a, text_b)
     aligned_a, aligned_b, cost = _align_texts(text_a_int, text_b_int, text_a, text_b, use_chardiff,
                                         debug)
 
@@ -122,6 +126,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
     for utt in utts:
         ref = utt_to_text_ref[utt]
         hyp = utt_to_text_hyp.get(utt)
+        total_count += len(ref)
         if hyp is None:
             print(f'!\tMissing hyp for utt {utt}')
             continue
@@ -130,7 +135,6 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
         fh.write(f'{utt}\n')
         lst = []
         for ref_w, hyp_w in zip(ref_aligned, hyp_aligned):
-            total_count += 1
             if ref_w == hyp_w:
                 lst.append(ref_w)
                 word_counts[ref_w] += 1
@@ -152,40 +156,25 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
 
         # Calculate CER
         if cer:
-            def flatten_word_list(words):
-                lst = []
-                for i, word in enumerate(words):
-                    for c in word:
-                        lst.append(c)
-                    if i != len(words) - 1:
-                        lst.append(' ')
-                return lst
-            char_ref = flatten_word_list(ref)
-            char_hyp = flatten_word_list(hyp)
-            char_ref_aligned, char_hyp_aligned, cost = align_texts(char_ref, char_hyp, debug, use_chardiff=False)
-            for ref_c, hyp_c in zip(char_ref_aligned, char_hyp_aligned):
-                char_count += 1
-                if ref_c != hyp_c:
-                    char_error_count += 1
+            char_ref = [c for word in ref for c in word]
+            char_hyp = [c for word in hyp for c in word]
+            ref_int, hyp_int, dct = convert_to_int('<eps>', char_ref, char_hyp)
+            # print(utt, ref_int, hyp_int)
+            char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
+            char_count += len(ref_int)
 
         # Get OOV CER
         if oov_set:
             for i, ref_w in enumerate(ref_aligned):
                 if ref_w in oov_set:
                     oov_count_denom += len(ref_w)
-                    d = 100000
-                    # Alignment doesn't take character distance into account, so actual closest word could be
-                    # one alignment step away
-                    startidx = i - 1 if i - 1 >= 0 else 0
-                    for hyp_w in hyp_aligned[startidx:i+2]:
-                        if hyp_w == '<eps>':
-                            if len(ref_w) < d:
-                                d = len(ref_w)
-                        else:
-                            d_tentative = levd.distance(ref_w, hyp_w)
-                            if d_tentative < d:
-                                d = d_tentative
-                    assert d != 100000
+                    # startidx = i - 1 if i - 1 >= 0 else 0
+                    hyp_w = hyp_aligned[i]
+                    if hyp_w == '<eps>':
+                        if len(ref_w) < d:
+                            d = len(ref_w)
+                    else:
+                        d = levd.distance(ref_w, hyp_w)
                     oov_count_error += d
 
     wer = (sum(ins.values()) + sum(dels.values()) + sum(subs.values())) / float(total_count)

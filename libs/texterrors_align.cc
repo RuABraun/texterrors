@@ -49,13 +49,17 @@ void create_cost_mat(int32* cost_mat, const T* a, const T* b,
   }
 }
 
-
-int levdistance(const std::string& a, const std::string& b) {
-  int32 M = a.length();
-  int32 N = b.length();
+template <class T>
+int levdistance(const T* a, const T* b, int32 M, int32 N) {
+  if (!M) return N;
+  if (!N) return M;
   std::vector<int32> cost_mat(M*N);
-  create_cost_mat(cost_mat.data(), a.data(), b.data(), M, N);
+  create_cost_mat(cost_mat.data(), a, b, M, N);
   return cost_mat.back();
+}
+
+int lev_distance(std::vector<int> a, std::vector<int> b) {
+  return levdistance(a.data(), b.data(), a.size(), b.size());
 }
 
 
@@ -192,12 +196,14 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
   if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
   int32_t* ptr = (int32_t*) buf.ptr;
-
+//  std::cout << "STARTING"<<std::endl;
   for(int32_t i = 0; i < M; i++) {
 		for(int32_t j = 0; j < N; j++) {
       int32_t transition_cost;
 		  if (use_chardist) {
-        transition_cost = levdistance(texta[i], textb[j]);\
+		    std::string& a = texta[i];
+        std::string& b = textb[j];
+        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size());
       } else {
         transition_cost = texta[i] == textb[j] ? 0 : 1;
 		  }
@@ -223,7 +229,8 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
       ptr[i * N + j] = sum;
     }
   }
-  return ptr[(M-1) * (N-1)];
+//  std::cout << "DONE"<<std::endl;
+  return ptr[0];  // TODO: FIX
 }
 
 
@@ -231,4 +238,5 @@ PYBIND11_MODULE(texterrors_align,m) {
   m.doc() = "pybind11 plugin";
   m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
   m.def("get_best_path", &get_best_path, "get_best_path");
+  m.def("lev_distance", &lev_distance);
 }
