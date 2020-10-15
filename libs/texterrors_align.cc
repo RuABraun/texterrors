@@ -23,42 +23,85 @@ struct Pair {
 template <class T>
 void create_cost_mat(int32* cost_mat, const T* a, const T* b,
                      const int32 M, const int32 N) {
+  std::string s = "";
   for (int32 i = 0; i < M; ++i) {
     for (int32 j = 0; j < N; ++j) {
-      int32 transition_cost = a[i] == b[j] ? 0 : 1;
+      int32 transition_cost = a[i-1] == b[j-1] ? 0 : 1;
 
       if (i == 0 && j == 0) {
         cost_mat[0] = 0;
+        s += std::to_string(0) + " ";
         continue;
       }
       if (i == 0) {
-        cost_mat[j] = cost_mat[j - 1] + transition_cost;
+        int new_value = cost_mat[j - 1] + 3;
+        cost_mat[j] = new_value;
+        s += std::to_string(new_value) + " ";
         continue;
       }
       if (j == 0) {
-        cost_mat[i * N] = cost_mat[(i-1) * N] + transition_cost;
+        int new_value = cost_mat[(i-1) * N] + 3;
+        cost_mat[i * N] = new_value;
+        s += std::to_string(new_value) + " ";
         continue;
       }
 
-      int32 upc = cost_mat[(i-1) * N + j] + transition_cost;
-      int32 leftc = cost_mat[i * N + j - 1] + transition_cost;
-      int32 diagc = cost_mat[(i-1) * N + j - 1] + 2 * transition_cost;
+      int32 upc = cost_mat[(i-1) * N + j] + 3;
+      int32 leftc = cost_mat[i * N + j - 1] + 3;
+      int32 diagc = cost_mat[(i-1) * N + j - 1] + 4 * transition_cost;
       int32 cost = std::min(upc, std::min(leftc, diagc));
+      s += std::to_string(cost) + " ";
       cost_mat[i * N + j] = cost;
     }
+    s += "\n";
   }
+  std::cout <<s<<std::endl;
 }
 
 template <class T>
 int levdistance(const T* a, const T* b, int32 M, int32 N) {
   if (!M) return N;
   if (!N) return M;
-  std::vector<int32> cost_mat(M*N);
+  std::vector<int32> cost_mat((M+1)*(N+1));
   create_cost_mat(cost_mat.data(), a, b, M, N);
-  return cost_mat.back();
+  int cost = 0;
+  int i = M - 1, j = N - 1;
+  while (i != 0 || j != 0) {
+    if (i == 0) {
+      j--;
+      cost++;
+    } else if (j == 0) {
+      i--;
+      cost++;
+    } else {
+      int current_cost = cost_mat[i * N + j];
+      int diagc = cost_mat[(i-1) * N + j - 1];
+      int upc = cost_mat[(i-1) * N + j];
+      int leftc = cost_mat[i * N + j - 1];
+      if (diagc <= upc && diagc <= leftc) {
+        i--, j--;
+        if (current_cost != diagc) cost++;
+      } else if (upc < diagc && upc <= leftc) {
+        i--;
+        if (current_cost != upc) cost++;
+      } else if (leftc < diagc && leftc <= upc) {
+        j--;
+        if (current_cost != leftc) cost++;
+      } else {
+        std::cerr <<diagc<<" "<<upc<<" "<<leftc<< " WTF"<<std::endl;
+        throw "Should not happen!";
+      }
+    }
+  }
+  return cost;
 }
 
-int lev_distance(std::vector<int> a, std::vector<int> b) {
+template <class T>
+int lev_distance(std::vector<T> a, std::vector<T> b) {
+  return levdistance(a.data(), b.data(), a.size(), b.size());
+}
+
+int lev_distance_str(std::string a, std::string b) {
   return levdistance(a.data(), b.data(), a.size(), b.size());
 }
 
@@ -213,17 +256,17 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
         continue;
 		  }
 		  if (i == 0)  {
-		    ptr[j] = ptr[j - 1] + transition_cost;
+		    ptr[j] = ptr[j - 1] + 3*transition_cost;
         continue;
 		  }
 		  if (j == 0) {
-		    ptr[i * N] = ptr[(i-1) * N] + transition_cost;
+		    ptr[i * N] = ptr[(i-1) * N] + 3*transition_cost;
         continue;
 		  }
 
-      int32_t upc = ptr[(i-1) * N + j] + transition_cost;
-      int32_t leftc = ptr[i * N + j - 1] + transition_cost;
-      int32_t diagc = ptr[(i-1) * N + j - 1] + 2 * transition_cost;
+      int32_t upc = ptr[(i-1) * N + j] + 3 * transition_cost;
+      int32_t leftc = ptr[i * N + j - 1] + 3 * transition_cost;
+      int32_t diagc = ptr[(i-1) * N + j - 1] + 4 * transition_cost;
       int32_t sum = std::min(upc, std::min(leftc, diagc));
 
       ptr[i * N + j] = sum;
@@ -238,5 +281,7 @@ PYBIND11_MODULE(texterrors_align,m) {
   m.doc() = "pybind11 plugin";
   m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
   m.def("get_best_path", &get_best_path, "get_best_path");
-  m.def("lev_distance", &lev_distance);
+  m.def("lev_distance", lev_distance<int>);
+  m.def("lev_distance", lev_distance<char>);
+  m.def("lev_distance_str", &lev_distance_str);
 }
