@@ -23,39 +23,45 @@ struct Pair {
 template <class T>
 void create_cost_mat(int32* cost_mat, const T* a, const T* b,
                      const int32 M, const int32 N) {
-  std::string s = "";
-  for (int32 i = 0; i < M; ++i) {
-    for (int32 j = 0; j < N; ++j) {
-      int32 transition_cost = a[i-1] == b[j-1] ? 0 : 1;
+  int row_length = N+1;
+//  std::string s = "";
+  for (int32 i = 0; i <= M; ++i) {
+    for (int32 j = 0; j <= N; ++j) {
 
       if (i == 0 && j == 0) {
         cost_mat[0] = 0;
-        s += std::to_string(0) + " ";
+//        s += std::to_string(0) + " ";
         continue;
       }
       if (i == 0) {
         int new_value = cost_mat[j - 1] + 3;
         cost_mat[j] = new_value;
-        s += std::to_string(new_value) + " ";
+//        s += std::to_string(new_value) + " ";
         continue;
       }
       if (j == 0) {
-        int new_value = cost_mat[(i-1) * N] + 3;
-        cost_mat[i * N] = new_value;
-        s += std::to_string(new_value) + " ";
+        int new_value = cost_mat[(i-1) * row_length] + 3;
+        cost_mat[i * row_length] = new_value;
+//        s += std::to_string(new_value) + " ";
         continue;
       }
+      int32 transition_cost = a[i-1] == b[j-1] ? 0 : 1;
 
-      int32 upc = cost_mat[(i-1) * N + j] + 3;
-      int32 leftc = cost_mat[i * N + j - 1] + 3;
-      int32 diagc = cost_mat[(i-1) * N + j - 1] + 4 * transition_cost;
-      int32 cost = std::min(upc, std::min(leftc, diagc));
-      s += std::to_string(cost) + " ";
-      cost_mat[i * N + j] = cost;
+      int32 upc = cost_mat[(i-1) * row_length + j] + 3;
+      int32 leftc = cost_mat[i * row_length + j - 1] + 3;
+      int32 diagc = cost_mat[(i-1) * row_length + j - 1] + 4 * transition_cost;
+      int32 cost = std::min(upc, std::min(leftc, diagc) );
+//      s += std::to_string(cost) + " ";
+      cost_mat[i * row_length + j] = cost;
     }
-    s += "\n";
+//    s += "\n";
+//    std::string ss = "";
+//    for (int k = 0; k < (M+1)*(N+1); k++) {
+//      ss += std::to_string(cost_mat[k]) + " ";
+//    }
+//    std::cout << ss << std::endl;
   }
-  std::cout <<s<<std::endl;
+//  std::cout <<s<<std::endl;
 }
 
 template <class T>
@@ -65,7 +71,8 @@ int levdistance(const T* a, const T* b, int32 M, int32 N) {
   std::vector<int32> cost_mat((M+1)*(N+1));
   create_cost_mat(cost_mat.data(), a, b, M, N);
   int cost = 0;
-  int i = M - 1, j = N - 1;
+  int i = M, j = N;
+  int row_length = N+1;
   while (i != 0 || j != 0) {
     if (i == 0) {
       j--;
@@ -74,10 +81,10 @@ int levdistance(const T* a, const T* b, int32 M, int32 N) {
       i--;
       cost++;
     } else {
-      int current_cost = cost_mat[i * N + j];
-      int diagc = cost_mat[(i-1) * N + j - 1];
-      int upc = cost_mat[(i-1) * N + j];
-      int leftc = cost_mat[i * N + j - 1];
+      int current_cost = cost_mat[i * row_length + j];
+      int diagc = cost_mat[(i-1) * row_length + j - 1];
+      int upc = cost_mat[(i-1) * row_length + j];
+      int leftc = cost_mat[i * row_length + j - 1];
       if (diagc <= upc && diagc <= leftc) {
         i--, j--;
         if (current_cost != diagc) cost++;
@@ -92,6 +99,7 @@ int levdistance(const T* a, const T* b, int32 M, int32 N) {
         throw "Should not happen!";
       }
     }
+//    std::cout << cost << " "<<i<<" "<<j<<std::endl;
   }
   return cost;
 }
@@ -240,14 +248,19 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
   auto buf = array.request();
   int32_t* ptr = (int32_t*) buf.ptr;
 //  std::cout << "STARTING"<<std::endl;
-  for(int32_t i = 0; i < M; i++) {
-		for(int32_t j = 0; j < N; j++) {
-      int32_t transition_cost;
+  for(int32 i = 0; i < M; i++) {
+		for(int32 j = 0; j < N; j++) {
+      int32 transition_cost;
+      int32 a_cost, b_cost;
 		  if (use_chardist) {
 		    std::string& a = texta[i];
         std::string& b = textb[j];
         transition_cost = levdistance(a.data(), b.data(), a.size(), b.size());
+        a_cost = a.size();
+        b_cost = b.size();
       } else {
+        a_cost = 1;
+        b_cost = 1;
         transition_cost = texta[i] == textb[j] ? 0 : 1;
 		  }
 
@@ -256,17 +269,17 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
         continue;
 		  }
 		  if (i == 0)  {
-		    ptr[j] = ptr[j - 1] + 3*transition_cost;
+		    ptr[j] = ptr[j - 1] + 3;
         continue;
 		  }
 		  if (j == 0) {
-		    ptr[i * N] = ptr[(i-1) * N] + 3*transition_cost;
+		    ptr[i * N] = ptr[(i-1) * N] + 3;
         continue;
 		  }
 
-      int32_t upc = ptr[(i-1) * N + j] + 3 * transition_cost;
-      int32_t leftc = ptr[i * N + j - 1] + 3 * transition_cost;
-      int32_t diagc = ptr[(i-1) * N + j - 1] + 4 * transition_cost;
+      int32_t upc = ptr[(i-1) * N + j] + a_cost;
+      int32_t leftc = ptr[i * N + j - 1] + b_cost;
+      int32_t diagc = ptr[(i-1) * N + j - 1] + transition_cost;
       int32_t sum = std::min(upc, std::min(leftc, diagc));
 
       ptr[i * N + j] = sum;
