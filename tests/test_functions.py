@@ -45,9 +45,24 @@ def test_wer():
 
     ref = 'GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split()
     hyp = "THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split()
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, True)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
     wer = calc_wer(ref_aligned, hyp_aligned)
-    assert round(wer, 2) == 92.31, round(wer, 2)
+    assert round(wer, 2) == 100.0, round(wer, 2)  # kaldi gets 92.31 ! but has worse alignment
+
+
+def test_oov_cer():
+    oov_set = {'airport'}
+    ref_aligned = 'the missing word is <eps> airport okay'.split()
+    hyp_aligned = 'the missing word is air port okay'.split()
+    err, cnt = texterrors.get_oov_cer(ref_aligned, hyp_aligned, oov_set)
+    assert err / cnt == 0., err / cnt
+
+    ref_aligned = 'the missing word is airport okay'.split()
+    hyp_aligned = 'the missing word is airport okay'.split()
+    err, cnt = texterrors.get_oov_cer(ref_aligned, hyp_aligned, oov_set)
+    assert err / cnt == 0., err / cnt
+
 
 test_levd()
 test_wer()
+test_oov_cer()

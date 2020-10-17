@@ -101,6 +101,29 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
     return aligned_a, aligned_b, cost
 
 
+def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
+    assert len(ref_aligned) == len(hyp_aligned)
+    oov_count_denom = 0
+    oov_count_error = 0
+    for i, ref_w in enumerate(ref_aligned):
+        if ref_w in oov_set:
+            oov_count_denom += len(ref_w)
+            startidx = i - 1 if i - 1 >= 0 else 0
+            hyp_w = ''
+            for idx in range(startidx, startidx + 2):
+                if idx != i:
+                    if ref_aligned[idx] != '<eps>' or idx > len(ref_aligned) - 1:
+                        continue
+                    hyp_w += hyp_aligned[idx]
+                else:
+                    hyp_w += hyp_aligned[idx]
+            hyp_w = hyp_w.strip()
+            hyp_w = hyp_w.replace('<eps>', '')
+            d = texterrors_align.lev_distance_str(ref_w, hyp_w)
+            oov_count_error += d
+    return oov_count_error, oov_count_denom
+
+
 def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                  use_chardiff=True, skip_detailed=False, insert_tok='<eps>'):
     utt_to_text_ref = {}
@@ -180,22 +203,9 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
 
         # Get OOV CER
         if oov_set:
-            for i, ref_w in enumerate(ref_aligned):
-                if ref_w in oov_set:
-                    oov_count_denom += len(ref_w)
-                    startidx = i - 1 if i - 1 >= 0 else 0
-                    hyp_w = ''
-                    for idx in range(startidx, startidx + 2):
-                        if idx != i:
-                            if ref_w != '<eps>' or idx > len(ref_aligned) - 1:
-                                continue
-                            hyp_w += hyp_aligned[idx]
-                        else:
-                            hyp_w += hyp_aligned[idx]
-                    hyp_w = hyp_w.strip()
-                    hyp_w = hyp_w.replace('<eps>', '')
-                    d = texterrors_align.lev_distance_str(ref_w, hyp_w)
-                    oov_count_error += d
+            err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
+            oov_count_error += err
+            oov_count_denom += cnt
 
     ins_count = sum(ins.values())
     del_count = sum(dels.values())
