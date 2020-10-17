@@ -35,14 +35,14 @@ def _align_texts(text_a, text_b, text_a_str, text_b_str, use_chardiff, debug=Fal
     text_a_str = ['<eps>'] + text_a_str
     text_b_str = ['<eps>'] + text_b_str
     # +1 because of padded start token
-    summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.int32, order="C")
+    summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
     cost = texterrors_align.calc_sum_cost(summed_cost, text_a_str, text_b_str, use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%d')
     best_path_lst = []
-    texterrors_align.get_best_path(summed_cost, best_path_lst, text_a, text_b)
+    texterrors_align.get_best_path(summed_cost, best_path_lst, text_a_str, text_b_str)
     assert len(best_path_lst) % 2 == 0
     path = []
     for n in range(0, len(best_path_lst), 2):
@@ -96,8 +96,9 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
     aligned_a = [dct[e] for e in aligned_a]
     aligned_b = [dct[e] for e in aligned_b]
-    print(aligned_a)
-    print(aligned_b)
+    if debug:
+        print(aligned_a)
+        print(aligned_b)
     return aligned_a, aligned_b, cost
 
 
@@ -129,7 +130,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
     total_count = 0
     cost_total = 0
     word_counts = defaultdict(int)
-    if outf is not None:
+    if outf:
         fh = open(outf, 'w')
     else:
         import sys; fh = sys.stdout
@@ -196,35 +197,40 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
                     d = texterrors_align.lev_distance_str(ref_w, hyp_w)
                     oov_count_error += d
 
-    wer = (sum(ins.values()) + sum(dels.values()) + sum(subs.values())) / float(total_count)
-    fh.write(f'\nWER: {100.*wer:.2f}\n\n')
-
+    ins_count = sum(ins.values())
+    del_count = sum(dels.values())
+    sub_count = sum(subs.values())
+    wer = (ins_count + del_count + sub_count) / float(total_count)
     if not skip_detailed:
-        if cer:
-            cer = char_error_count / float(char_count)
-            fh.write(f'CER: {100.*cer:.2f}\n\n')
-        if oov_set:
-            fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.2f}\n\n')
-        fh.write('Insertions:\n')
+        fh.write('\n')
+    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\n')
+
+    if cer:
+        cer = char_error_count / float(char_count)
+        fh.write(f'CER: {100.*cer:.2f}\n')
+    if oov_set:
+        fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.2f}\n')
+    if not skip_detailed:
+        fh.write(f'Insertions:\n')
         for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:count]:
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
-        fh.write('Deletions:\n')
+        fh.write(f'Deletions:\n')
         for v, c in sorted(dels.items(), key=lambda x: x[1], reverse=True)[:count]:
             fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
         fh.write('\n')
-        fh.write('Substitutions:\n')
+        fh.write(f'Substitutions:\n')
         for v, c in sorted(subs.items(), key=lambda x: x[1], reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
-    if outf is not None:
+    if outf:
         fh.close()
 
 
 def main(
     fpath_ref: "Reference text",
     fpath_hyp: "Hypothesis text",
-    outf: ('Optional output file') = None,
+    outf: ('Optional output file') = '',
     oov_list_f: ('List of OOVs', 'option', None) = None,
     isark: ('', 'flag', None)=False,
     cer: ('', 'flag', None)=False,
@@ -232,6 +238,8 @@ def main(
     no_chardiff: ("Don't use character lev distance for alignment", 'flag', None) = False,
     skip_detailed: ('', 'flag', 's') = False
 ):
+    if no_chardiff:
+        raise RuntimeError('Not implemented!')
     oov_set = []
     if oov_list_f:
         with open(oov_list_f) as fh:

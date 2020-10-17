@@ -10,6 +10,11 @@ namespace py = pybind11;
 
 typedef int32_t int32;
 
+
+bool isclose(double a, double b) {
+  return abs(a - b) < 0.0001;
+}
+
 struct Pair {
 		Pair() {}
     Pair(int16_t f_, int16_t s_) {
@@ -85,17 +90,18 @@ int levdistance(const T* a, const T* b, int32 M, int32 N) {
       int diagc = cost_mat[(i-1) * row_length + j - 1];
       int upc = cost_mat[(i-1) * row_length + j];
       int leftc = cost_mat[i * row_length + j - 1];
-      if (diagc <= upc && diagc <= leftc) {
+      int32 transition_cost = a[i-1] == b[j-1] ? 0 : 1;
+      if (diagc + 4 * transition_cost == current_cost) {
         i--, j--;
         if (current_cost != diagc) cost++;
-      } else if (upc < diagc && upc <= leftc) {
+      } else if (upc + 3 == current_cost) {
         i--;
-        if (current_cost != upc) cost++;
-      } else if (leftc < diagc && leftc <= upc) {
+        cost++;
+      } else if (leftc + 3 == current_cost) {
         j--;
-        if (current_cost != leftc) cost++;
+        cost++;
       } else {
-        std::cerr <<diagc<<" "<<upc<<" "<<leftc<< " WTF"<<std::endl;
+        std::cerr <<diagc<<" "<<upc<<" "<<leftc<<" "<<current_cost<<" "<< transition_cost<< " WTF"<<std::endl;
         throw "Should not happen!";
       }
     }
@@ -114,107 +120,45 @@ int lev_distance_str(std::string a, std::string b) {
 }
 
 
-void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vector<int32_t>& texta,
-									 std::vector<int32_t>& textb) {
+void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vector<std::string> texta,
+									 std::vector<std::string> textb) {
 	auto buf = array.request();
-	int32_t* cost_mat = (int32_t*) buf.ptr;
+  double* cost_mat = (double*) buf.ptr;
 	int32_t numr = array.shape()[0], numc = array.shape()[1];
-	int32_t maxlen = numr + numc;
 
 	if (numr > 32000 || numc > 32000) throw std::runtime_error("Input sequences are too large!");
 
-	std::queue< std::vector<Pair>> paths_to_explore;
-	std::vector<Pair> bestpath;
-	std::vector<Pair> path;
-	int32_t best_continuous_match_len = -1;
-	path.reserve(maxlen);
+  std::vector<Pair> bestpath;
 	int i = numr - 1, j = numc - 1;
-	path.push_back(Pair(i, j));
-	int32_t max_paths_explore = 30000;
-	int32_t paths_found = 0;
-//	std::string a = "";
-//	for (int n = 0; n < texta.size(); n++) {
-//	  a += std::to_string(texta[n]) + " ";
-//	}
-//  std::string b = "";
-//  for (int n = 0; n < textb.size(); n++) {
-//    b += std::to_string(textb[n]) + " ";
-//  }
-//  std::cout << "A "<<a<<"\n";
-//  std::cout << "B "<<b<<"\n";
-	while (true) {
-		if (i == 0 && j == 0) {
-			int32_t path_len = path.size();
-			int32_t startidx = -1, endidx = -1;
-      int32_t continuous_match_len = 0;
-//      std::string str_pairs = "pairs ";
-			for(int32_t n = 0; n < path_len - 1; n++) {
-				Pair& pair = path[n];
-//        str_pairs += std::to_string(texta[path[n].i])+","+std::to_string(textb[path[n].j])+ " ";
-				if (pair.i - 1 == path[n+1].i && pair.j - 1 == path[n+1].j && texta[path[n].i] == textb[path[n].j]) {
-          continuous_match_len++;
-				}
-			}
-//      std::cout << str_pairs << std::endl;
-			if (bestpath.size() == 0 || continuous_match_len > best_continuous_match_len) {
-				best_continuous_match_len = continuous_match_len;
-				bestpath = path;
-//				std::cout << "bestpath\n";
-			}
-//			std::string s = "";
-//			for (int n = 0; n < path_len; n++) {
-//        Pair& pair = path[n];
-//        s += std::to_string(pair.i) + "," + std::to_string(pair.j)+" ";
-//			}
-//			std::cout << "Path "<<continuous_match_len<<" " << s <<std::endl;
-			if (paths_to_explore.empty()) {
-				break;
-			}
-			path = paths_to_explore.front();
-			Pair& p = path.back();
-			i = p.i, j = p.j;
-			paths_to_explore.pop();
-		}
-
-		int32_t upc, leftc, diagc;
+  bestpath.emplace_back(i, j);
+	while (i != 0 || j != 0) {
+    double upc, leftc, diagc;
 		int idx;  // 0 up, 1 left, 2 diagonal
 		if (i == 0) {
 		  idx = 1;
 		} else if (j == 0) {
 		  idx = 0;
 		} else {
+      float current_cost = cost_mat[i * numc + j];
       upc = cost_mat[(i-1) * numc + j];
       leftc = cost_mat[i * numc + j - 1];
       diagc = cost_mat[(i-1) * numc + j - 1];
-
-      if (diagc < leftc && diagc < upc) {
+      std::string& a = texta[i];
+      std::string& b = textb[j];
+      double up_trans_cost = 1;
+      double left_trans_cost = 1;
+      double diag_trans_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+      if (isclose(diagc + diag_trans_cost, current_cost)) {
         idx = 2;
-      } else if (leftc < upc && leftc < diagc) {
-        idx = 1;
-      } else if (upc < leftc && upc < diagc) {
+      } else if (isclose(upc + up_trans_cost, current_cost)) {
         idx = 0;
+      } else if (isclose(leftc + left_trans_cost, current_cost)) {
+        idx = 1;
       } else {
-        if (paths_found < max_paths_explore) {
-          if (upc == diagc && upc < leftc) {
-            std::vector<Pair> pathcopied(path);
-            Pair explorep(i - 1, j);
-            pathcopied.push_back(explorep);
-            paths_to_explore.push(pathcopied);
-            paths_found++;
-            idx = 2;
-          } else if (leftc == diagc && leftc < upc) {
-            std::vector<Pair> pathcopied(path);
-            Pair explorep(i, j - 1);
-            pathcopied.push_back(explorep);
-            paths_to_explore.push(pathcopied);
-            paths_found++;
-            idx = 2;
-          } else if (leftc == diagc && leftc == upc) {
-            idx = 2;
-//            throw std::runtime_error("Should not be possible !");
-          }
-//          std::cout << paths_to_explore.size()<<std::endl;
-        }
+        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<std::endl;
+        std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;
+        std::cout << diag_trans_cost + diagc <<" "<<current_cost <<std::endl;
+        throw std::runtime_error("Should not be possible !");
       }
 		}
 
@@ -227,18 +171,19 @@ void get_best_path(py::array_t<int32_t> array, py::list& bestpath_lst, std::vect
     } else {
       throw "WTF";
     }
-    path.emplace_back(i, j);
+//    std::cout <<i<<" "<<j<<std::endl;
+    bestpath.emplace_back(i, j);
 	}
 
 	if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
-	for(int32_t k = 0; k < bestpath.size(); k++) {
+	for (int32_t k = 0; k < bestpath.size(); k++) {
 		bestpath_lst.append(bestpath[k].i);
 		bestpath_lst.append(bestpath[k].j);
 	}
 }
 
 
-int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
+int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
                          std::vector<std::string>& textb, bool use_chardist) {
 	if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
@@ -246,22 +191,22 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
   int M = array.shape()[0], N = array.shape()[1];
   if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
-  int32_t* ptr = (int32_t*) buf.ptr;
+  double* ptr = (double*) buf.ptr;
 //  std::cout << "STARTING"<<std::endl;
   for(int32 i = 0; i < M; i++) {
 		for(int32 j = 0; j < N; j++) {
-      int32 transition_cost;
-      int32 a_cost, b_cost;
+      double transition_cost, a_cost, b_cost;
 		  if (use_chardist) {
 		    std::string& a = texta[i];
         std::string& b = textb[j];
-        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size());
-        a_cost = a.size();
-        b_cost = b.size();
+        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+//        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
+        a_cost = 1.;
+        b_cost = 1.;
       } else {
-        a_cost = 1;
-        b_cost = 1;
-        transition_cost = texta[i] == textb[j] ? 0 : 1;
+        a_cost = 1.;
+        b_cost = 1.;
+        transition_cost = texta[i] == textb[j] ? 0. : 1.;
 		  }
 
 		  if (i == 0 && j == 0) {
@@ -269,19 +214,18 @@ int calc_sum_cost(py::array_t<int32_t> array, std::vector<std::string>& texta,
         continue;
 		  }
 		  if (i == 0)  {
-		    ptr[j] = ptr[j - 1] + 3;
+		    ptr[j] = ptr[j - 1] + b_cost;
         continue;
 		  }
 		  if (j == 0) {
-		    ptr[i * N] = ptr[(i-1) * N] + 3;
+		    ptr[i * N] = ptr[(i-1) * N] + a_cost;
         continue;
 		  }
 
-      int32_t upc = ptr[(i-1) * N + j] + a_cost;
-      int32_t leftc = ptr[i * N + j - 1] + b_cost;
-      int32_t diagc = ptr[(i-1) * N + j - 1] + transition_cost;
-      int32_t sum = std::min(upc, std::min(leftc, diagc));
-
+      double upc = ptr[(i-1) * N + j] + a_cost;
+      double leftc = ptr[i * N + j - 1] + b_cost;
+      double diagc = ptr[(i-1) * N + j - 1] + transition_cost;
+      double sum = std::min(upc, std::min(leftc, diagc));
       ptr[i * N + j] = sum;
     }
   }
