@@ -8,15 +8,19 @@ from loguru import logger
 from termcolor import colored
 
 
-def convert_to_int(insert_tok, lst_a, lst_b):
-    dct = {insert_tok: 0}
-    set_words = set()
-    for lst in (lst_a, lst_b):
-        set_words.update(lst)
-    for i, w in enumerate(set_words):
-        dct[w] = i + 1
-    dct.update({v: k for k, v in dct.items()})
-    return [dct[w] for w in lst_a], [dct[w] for w in lst_b], dct
+def convert_to_int(lst_a, lst_b, dct):
+    def convert(lst, dct_syms):
+        intlst = []
+        for w in lst:
+            if w not in dct:
+                i = max(v for v in dct_syms.values() if isinstance(v, int)) + 1
+                dct_syms[w] = i
+                dct_syms[i] = w
+            intlst.append(dct_syms[w])
+        return intlst
+    int_a = convert(lst_a, dct)
+    int_b = convert(lst_b, dct)
+    return int_a, int_b
 
 
 def lev_distance(a, b):
@@ -26,21 +30,19 @@ def lev_distance(a, b):
         return texterrors_align.lev_distance(a, b)
 
 
-def _align_texts(text_a, text_b, text_a_str, text_b_str, use_chardiff, debug=False):
-    len_a = len(text_a)
-    len_b = len(text_b)
+def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
+    len_a = len(text_a_str)
+    len_b = len(text_b_str)
     # doing dynamic time warp
-    text_a = [0] + text_a
-    text_b = [0] + text_b
-    text_a_str = ['<eps>'] + text_a_str
-    text_b_str = ['<eps>'] + text_b_str
+    text_a_str = [insert_tok] + text_a_str
+    text_b_str = [insert_tok] + text_b_str
     # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
     cost = texterrors_align.calc_sum_cost(summed_cost, text_a_str, text_b_str, use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
-        np.savetxt('summedcost', summed_cost, fmt='%d')
+        np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
     best_path_lst = []
     texterrors_align.get_best_path(summed_cost, best_path_lst, text_a_str, text_b_str)
     assert len(best_path_lst) % 2 == 0
@@ -73,13 +75,13 @@ def _align_texts(text_a, text_b, text_a_str, text_b_str, use_chardiff, debug=Fal
     for i, j in list(reversed(path)):
         # print(text_a[i], text_b[i], file=sys.stderr)
         if i != lasti:
-            aligned_a.append(text_a[i])
+            aligned_a.append(text_a_str[i])
         else:
-            aligned_a.append(0)
+            aligned_a.append(insert_tok)
         if j != lastj:
-            aligned_b.append(text_b[j])
+            aligned_b.append(text_b_str[j])
         else:
-            aligned_b.append(0)
+            aligned_b.append(insert_tok)
         lasti, lastj = i, j
 
     return aligned_a, aligned_b, cost
@@ -90,12 +92,9 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
     assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
     assert isinstance(text_a[0], str)
 
-    text_a_int, text_b_int, dct = convert_to_int(insert_tok, text_a, text_b)
-    aligned_a, aligned_b, cost = _align_texts(text_a_int, text_b_int, text_a, text_b, use_chardiff,
-                                        debug)
+    aligned_a, aligned_b, cost = _align_texts(text_a, text_b, use_chardiff,
+                                              debug=debug, insert_tok=insert_tok)
 
-    aligned_a = [dct[e] for e in aligned_a]
-    aligned_b = [dct[e] for e in aligned_b]
     if debug:
         print(aligned_a)
         print(aligned_b)
@@ -103,7 +102,7 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
 
 def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
-                 use_chardiff=True, skip_detailed=False):
+                 use_chardiff=True, skip_detailed=False, insert_tok='<eps>'):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -136,6 +135,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
         import sys; fh = sys.stdout
     if not skip_detailed:
         fh.write('Per utt details:\n')
+
     for utt in utts:
         ref = utt_to_text_ref[utt]
         hyp = utt_to_text_hyp.get(utt)

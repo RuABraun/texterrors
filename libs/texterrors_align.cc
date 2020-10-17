@@ -145,8 +145,8 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       diagc = cost_mat[(i-1) * numc + j - 1];
       std::string& a = texta[i];
       std::string& b = textb[j];
-      double up_trans_cost = 1;
-      double left_trans_cost = 1;
+      double up_trans_cost = 1.0;
+      double left_trans_cost = 1.0;
       double diag_trans_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
       if (isclose(diagc + diag_trans_cost, current_cost)) {
         idx = 2;
@@ -168,10 +168,7 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       j--;
     } else if (idx == 2) {
       i--, j--;
-    } else {
-      throw "WTF";
     }
-//    std::cout <<i<<" "<<j<<std::endl;
     bestpath.emplace_back(i, j);
 	}
 
@@ -201,8 +198,8 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
         std::string& b = textb[j];
         transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
 //        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
-        a_cost = 1.;
-        b_cost = 1.;
+        a_cost = 1.0;
+        b_cost = 1.0;
       } else {
         a_cost = 1.;
         b_cost = 1.;

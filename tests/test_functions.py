@@ -43,5 +43,11 @@ def test_wer():
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 16.67, round(wer, 2)
 
+    ref = 'GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split()
+    hyp = "THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split()
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, True)
+    wer = calc_wer(ref_aligned, hyp_aligned)
+    assert round(wer, 2) == 92.31, round(wer, 2)
+
 test_levd()
 test_wer()
