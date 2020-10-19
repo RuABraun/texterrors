@@ -1,8 +1,8 @@
 # texterrors
 
-For getting detailed WER / CER stats. 
+For getting calculating WER, CER and OOV-CER and getting detailed statistics. 
 
-Colored output is based on the brilliant [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
 
 # Installing
 ```
@@ -17,7 +17,7 @@ The `texterrors.py` file will be in your path after running pip install.
 
 ## Command line
 
-The `-s` option will means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID.
+The `-s` option means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID.
 ```
 $ texterrors.py -isark -s ref hyp
 WER: 83.33 (ins 1, del 1, sub 3 / 6)
