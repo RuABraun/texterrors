@@ -45,7 +45,7 @@ def test_wer():
 
     ref = 'GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split()
     hyp = "THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split()
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 100.0, round(wer, 2)  # kaldi gets 92.31 ! but has worse alignment
 

@@ -112,7 +112,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
             hyp_w = ''
             for idx in range(startidx, startidx + 2):
                 if idx != i:
-                    if ref_aligned[idx] != '<eps>' or idx > len(ref_aligned) - 1:
+                    if idx > len(ref_aligned) - 1 or ref_aligned[idx] != '<eps>':
                         continue
                     hyp_w += hyp_aligned[idx]
                 else:
@@ -124,22 +124,31 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
     return oov_count_error, oov_count_denom
 
 
-def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
-                 use_chardiff=True, skip_detailed=False, insert_tok='<eps>'):
+def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
+                 use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>'):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
-        for line in fh:
-            utt, *words = line.split()
-            assert utt not in utts, 'There are repeated utterances in reference file! Exiting'
-            utts.append(utt)
-            utt_to_text_ref[utt] = words
+        for i, line in enumerate(fh):
+            if isark:
+                utt, *words = line.split()
+                assert utt not in utts, 'There are repeated utterances in reference file! Exiting'
+                utts.append(utt)
+                utt_to_text_ref[utt] = words
+            else:
+                words = line.split()
+                utt_to_text_ref[i] = words
 
     utt_to_text_hyp = {}
     with open(hyp_f) as fh:
-        for line in fh:
-            utt, *words = line.split()
-            utt_to_text_hyp[utt] = [w for w in words if w != '<unk>']
+        for i, line in enumerate(fh):
+            if isark:
+                utt, *words = line.split()
+                utt_to_text_hyp[utt] = [w for w in words if w != '<unk>']
+            else:
+                words = line.split()
+                utt_to_text_hyp[i] = [w for w in words if w != '<unk>']
+
 
     oov_count_denom = 0
     oov_count_error = 0
@@ -158,7 +167,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
         import sys; fh = sys.stdout
     if not skip_detailed:
         fh.write('Per utt details:\n')
-
+    dct_char = {insert_tok: 0, 0: insert_tok}
     for utt in utts:
         ref = utt_to_text_ref[utt]
         hyp = utt_to_text_hyp.get(utt)
@@ -196,7 +205,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
         if cer:
             char_ref = [c for word in ref for c in word]
             char_hyp = [c for word in hyp for c in word]
-            ref_int, hyp_int, dct = convert_to_int('<eps>', char_ref, char_hyp)
+            ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
             # print(utt, ref_int, hyp_int)
             char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
             char_count += len(ref_int)
@@ -221,7 +230,7 @@ def process_arks(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=Fa
     if oov_set:
         fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.2f}\n')
     if not skip_detailed:
-        fh.write(f'Insertions:\n')
+        fh.write(f'\nInsertions:\n')
         for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:count]:
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
@@ -241,7 +250,7 @@ def main(
     fpath_ref: "Reference text",
     fpath_hyp: "Hypothesis text",
     outf: ('Optional output file') = '',
-    oov_list_f: ('List of OOVs', 'option', None) = None,
+    oov_list_f: ('List of OOVs', 'option', None) = '',
     isark: ('', 'flag', None)=False,
     cer: ('', 'flag', None)=False,
     debug: ("Print debug messages", "flag", "d")=False,
@@ -256,8 +265,8 @@ def main(
             for line in fh:
                 oov_set.append(line.split()[0])
         oov_set = set(oov_set)
-    process_arks(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
-                 use_chardiff=not no_chardiff, skip_detailed=skip_detailed)
+    process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
+                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed)
 
 
 if __name__ == "__main__":
