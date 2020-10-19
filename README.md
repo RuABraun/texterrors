@@ -25,7 +25,7 @@ WER: 83.33 (ins 1, del 1, sub 3 / 6)
 
 You can specify an output file to save the results, probably what you if you are getting detailed output.
 ```
-$ texterrors.py -isark -s -cer -oov-list-f oov_list ref hyp detailed_wer_output
+$ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 ```
 
 # Why is the WER slightly higher than in kaldi ?
@@ -34,10 +34,14 @@ This difference is because this tool does character aware alignment. Across a no
 
 In the below example a normal WER calculation would do a one-to-one mapping and arrive at a WER of 66.67\%.
 
-Reference  | test\tsentence\tokay\twords\tending\tnow 
-Hypothesis | test\ta\tsentenc\tok\tendin\tnow
+| test | sentence | okay    | words | ending | now |
+|------|----------|---------|-------|--------|-----|
+| test | a        | sentenc | ok    | endin  | now |
 
 But character aware alignment would result in the following alignment:
 
-test\t-\tsentence\tokay\twords\ending\tnow
-test\ta\tsentenc\tok\t-\tendin\tnow
+| test | - | sentence | okay | words | ending | now |
+|------|---|----------|------|-------|--------|-----|
+| test | a | sentenc  | ok   | -     | endin  | now |
+
+This results in a WER of 83.3\% because of the extra insertion and deletion. And I think one could argue this is the actually correct WER.
