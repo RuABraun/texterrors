@@ -1,2 +1,5 @@
 pybind11
 plac
+numpy
+loguru
+termcolor
