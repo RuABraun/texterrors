@@ -16,7 +16,7 @@ bool isclose(double a, double b) {
 }
 
 struct Pair {
-		Pair() {}
+    Pair() {}
     Pair(int16_t f_, int16_t s_) {
         i = f_;
         j = s_;
@@ -121,24 +121,24 @@ int lev_distance_str(std::string a, std::string b) {
 
 
 void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vector<std::string> texta,
-									 std::vector<std::string> textb) {
-	auto buf = array.request();
+                   std::vector<std::string> textb) {
+  auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
-	int32_t numr = array.shape()[0], numc = array.shape()[1];
+  int32_t numr = array.shape()[0], numc = array.shape()[1];
 
-	if (numr > 32000 || numc > 32000) throw std::runtime_error("Input sequences are too large!");
+  if (numr > 32000 || numc > 32000) throw std::runtime_error("Input sequences are too large!");
 
   std::vector<Pair> bestpath;
-	int i = numr - 1, j = numc - 1;
+  int i = numr - 1, j = numc - 1;
   bestpath.emplace_back(i, j);
-	while (i != 0 || j != 0) {
+  while (i != 0 || j != 0) {
     double upc, leftc, diagc;
-		int idx;  // 0 up, 1 left, 2 diagonal
-		if (i == 0) {
-		  idx = 1;
-		} else if (j == 0) {
-		  idx = 0;
-		} else {
+    int idx;  // 0 up, 1 left, 2 diagonal
+    if (i == 0) {
+      idx = 1;
+    } else if (j == 0) {
+      idx = 0;
+    } else {
       float current_cost = cost_mat[i * numc + j];
       upc = cost_mat[(i-1) * numc + j];
       leftc = cost_mat[i * numc + j - 1];
@@ -160,7 +160,7 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
         std::cout << diag_trans_cost + diagc <<" "<<current_cost <<std::endl;
         throw std::runtime_error("Should not be possible !");
       }
-		}
+    }
 
     if (idx == 0) {
       i--;
@@ -170,19 +170,19 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       i--, j--;
     }
     bestpath.emplace_back(i, j);
-	}
+  }
 
-	if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
-	for (int32_t k = 0; k < bestpath.size(); k++) {
-		bestpath_lst.append(bestpath[k].i);
-		bestpath_lst.append(bestpath[k].j);
-	}
+  if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
+  for (int32_t k = 0; k < bestpath.size(); k++) {
+    bestpath_lst.append(bestpath[k].i);
+    bestpath_lst.append(bestpath[k].j);
+  }
 }
 
 
 int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
                          std::vector<std::string>& textb, bool use_chardist) {
-	if ( array.ndim() != 2 )
+  if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
 
   int M = array.shape()[0], N = array.shape()[1];
@@ -191,10 +191,10 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
   double* ptr = (double*) buf.ptr;
 //  std::cout << "STARTING"<<std::endl;
   for(int32 i = 0; i < M; i++) {
-		for(int32 j = 0; j < N; j++) {
+    for(int32 j = 0; j < N; j++) {
       double transition_cost, a_cost, b_cost;
-		  if (use_chardist) {
-		    std::string& a = texta[i];
+      if (use_chardist) {
+        std::string& a = texta[i];
         std::string& b = textb[j];
         transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
 //        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
@@ -204,20 +204,20 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
         a_cost = 1.;
         b_cost = 1.;
         transition_cost = texta[i] == textb[j] ? 0. : 1.;
-		  }
+      }
 
-		  if (i == 0 && j == 0) {
-		    ptr[0] = 0;
+      if (i == 0 && j == 0) {
+        ptr[0] = 0;
         continue;
-		  }
-		  if (i == 0)  {
-		    ptr[j] = ptr[j - 1] + b_cost;
+      }
+      if (i == 0)  {
+        ptr[j] = ptr[j - 1] + b_cost;
         continue;
-		  }
-		  if (j == 0) {
-		    ptr[i * N] = ptr[(i-1) * N] + a_cost;
+      }
+      if (j == 0) {
+        ptr[i * N] = ptr[(i-1) * N] + a_cost;
         continue;
-		  }
+      }
 
       double upc = ptr[(i-1) * N + j] + a_cost;
       double leftc = ptr[i * N + j - 1] + b_cost;
