@@ -44,7 +44,7 @@ def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
     best_path_lst = []
-    texterrors_align.get_best_path(summed_cost, best_path_lst, text_a_str, text_b_str)
+    texterrors_align.get_best_path(summed_cost, best_path_lst, text_a_str, text_b_str, use_chardiff)
     assert len(best_path_lst) % 2 == 0
     path = []
     for n in range(0, len(best_path_lst), 2):

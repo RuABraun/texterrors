@@ -121,7 +121,7 @@ int lev_distance_str(std::string a, std::string b) {
 
 
 void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vector<std::string> texta,
-                   std::vector<std::string> textb) {
+                   std::vector<std::string> textb, bool use_chardiff) {
   auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
   int32_t numr = array.shape()[0], numc = array.shape()[1];
@@ -147,7 +147,13 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       std::string& b = textb[j];
       double up_trans_cost = 1.0;
       double left_trans_cost = 1.0;
-      double diag_trans_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+      double diag_trans_cost;
+      if (use_chardiff) {
+        diag_trans_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+      } else {
+        diag_trans_cost = a == b ? 0. : 1.;
+      }
       if (isclose(diagc + diag_trans_cost, current_cost)) {
         idx = 2;
       } else if (isclose(upc + up_trans_cost, current_cost)) {

@@ -30,6 +30,8 @@ $ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 
 # Why is the WER slightly higher than in kaldi ?
 
+**You can make it equal by using the `-no-chardiff` argument.**
+
 This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a difference of ~0.1% absolute.
 
 In the below example a normal WER calculation would do a one-to-one mapping and arrive at a WER of 66.67\%.

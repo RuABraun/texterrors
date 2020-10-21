@@ -1,5 +1,6 @@
 import Levenshtein as levd
 import texterrors
+import texterrors
 
 
 def test_levd():
@@ -45,9 +46,21 @@ def test_wer():
 
     ref = 'GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split()
     hyp = "THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split()
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, True)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 100.0, round(wer, 2)  # kaldi gets 92.31 ! but has worse alignment
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=False)
+    wer = calc_wer(ref_aligned, hyp_aligned)
+    assert round(wer, 2) == 92.31, round(wer, 2)
+
+    ref = 'test sentence okay words ending now'.split()
+    hyp = "test a sentenc ok endin now".split()
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
+    wer = calc_wer(ref_aligned, hyp_aligned)
+    assert round(wer, 2) == 83.33, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=False)
+    wer = calc_wer(ref_aligned, hyp_aligned)
+    assert round(wer, 2) == 66.67, round(wer, 2)
 
 
 def test_oov_cer():
