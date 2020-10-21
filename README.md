@@ -4,6 +4,8 @@ For getting calculating WER, CER and OOV-CER and getting detailed statistics.
 
 Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
 
+![Example](docs/images/texterrors_example.png)
+
 # Installing
 ```
 python -m pip install .
