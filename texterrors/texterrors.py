@@ -257,8 +257,7 @@ def main(
     no_chardiff: ("Don't use character lev distance for alignment", 'flag', None) = False,
     skip_detailed: ('', 'flag', 's') = False
 ):
-    if no_chardiff:
-        raise RuntimeError('Not implemented!')
+    
     oov_set = []
     if oov_list_f:
         with open(oov_list_f) as fh:
