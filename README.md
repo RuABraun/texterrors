@@ -1,8 +1,10 @@
 # texterrors
 
-For getting calculating WER, CER and OOV-CER and getting detailed statistics. 
+For calculating WER, CER and OOV-CER and getting detailed statistics. 
 
 Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+
+Does character aware alignment by default, core is C++ so is fast.
 
 Green - Insertion, Red - Deletion, Purple - Substitution
 
