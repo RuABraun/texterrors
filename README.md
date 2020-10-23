@@ -11,8 +11,12 @@ Green - Insertion, Red - Deletion, Purple - Substitution
 ![Example](docs/images/texterrors_example.png)
 
 # Installing
+Requires minimum python 3.6!
 ```
-python -m pip install .
+git clone https://github.com/RuABraun/texterrors.git
+cd texterrors
+pip install -r requirements.txt
+pip install .
 ```
 The package will be installed as `texterrors`.
 
