@@ -11,8 +11,12 @@ Green - Insertion, Red - Deletion, Purple - Substitution
 ![Example](docs/images/texterrors_example.png)
 
 # Installing
+Requires minimum python 3.6!
 ```
-python -m pip install .
+git clone https://github.com/RuABraun/texterrors.git
+cd texterrors
+pip install -r requirements.txt
+pip install .
 ```
 The package will be installed as `texterrors`.
 
@@ -33,6 +37,7 @@ You can specify an output file to save the results, probably what you if you are
 ```
 $ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 ```
+If you look at the output file with `less` use the `-R` flag to see color.
 
 # Why is the WER slightly higher than in kaldi ?
 
