@@ -1,6 +1,5 @@
 import Levenshtein as levd
 import texterrors
-import texterrors
 
 
 def test_levd():
@@ -68,7 +67,7 @@ def test_oov_cer():
     ref_aligned = 'the missing word is <eps> airport okay'.split()
     hyp_aligned = 'the missing word is air port okay'.split()
     err, cnt = texterrors.get_oov_cer(ref_aligned, hyp_aligned, oov_set)
-    assert err / cnt == 0., err / cnt
+    assert round(err / cnt, 2) == 0.14, round(err / cnt, 2)
 
     ref_aligned = 'the missing word is airport okay'.split()
     hyp_aligned = 'the missing word is airport okay'.split()

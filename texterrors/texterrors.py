@@ -114,7 +114,10 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
                 if idx != i:
                     if idx > len(ref_aligned) - 1 or ref_aligned[idx] != '<eps>':
                         continue
-                    hyp_w += hyp_aligned[idx]
+                    if idx < i:
+                        hyp_w += hyp_aligned[idx] + ' '
+                    else:
+                        hyp_w += ' ' + hyp_aligned[idx]
                 else:
                     hyp_w += hyp_aligned[idx]
             hyp_w = hyp_w.strip()
@@ -203,8 +206,16 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
 
         # Calculate CER
         if cer:
-            char_ref = [c for word in ref for c in word]
-            char_hyp = [c for word in hyp for c in word]
+            def convert_to_char_list(lst):
+                new = []
+                for word in lst:
+                    for c in word:
+                        new.append(c)
+                    new.append(' ')
+                return new
+            char_ref = convert_to_char_list(ref)
+            char_hyp = convert_to_char_list(hyp)
+
             ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
             # print(utt, ref_int, hyp_int)
             char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
