@@ -128,7 +128,8 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
 
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
-                 use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>'):
+                  use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
+                  not_score_end=False):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -141,6 +142,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             else:
                 words = line.split()
                 utt_to_text_ref[i] = words
+                utts.append(i)
 
     utt_to_text_hyp = {}
     with open(hyp_f) as fh:
@@ -152,7 +154,12 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 words = line.split()
                 utt_to_text_hyp[i] = [w for w in words if w != '<unk>']
 
+    keywords = set()
+    if keywords_list_f:
+        for line in open(keywords_list_f):
+            keywords.add(line.strip())
 
+    # Done reading input, processing.
     oov_count_denom = 0
     oov_count_error = 0
     char_count = 0
@@ -173,21 +180,32 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     dct_char = {insert_tok: 0, 0: insert_tok}
     for utt in utts:
         ref = utt_to_text_ref[utt]
+        if keywords:
+            ref = [w for w in ref if w in keywords]
+            if not len(ref):  # skip utterance is contains no keywords
+                continue
         hyp = utt_to_text_hyp.get(utt)
         total_count += len(ref)
         if hyp is None:
-            print(f'!\tMissing hyp for utt {utt}')
+            logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
+
         ref_aligned, hyp_aligned, cost = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
         cost_total += cost
         if not skip_detailed:
             fh.write(f'{utt}\n')
+        if not_score_end:
+            last_good_index = -1
+            for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):
+                if ref_w == hyp_w:
+                    last_good_index = i
         lst = []
-        for ref_w, hyp_w in zip(ref_aligned, hyp_aligned):
+        for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
+            if not_score_end and i > last_good_index:
+                break
             if ref_w == hyp_w:
                 lst.append(ref_w)
                 word_counts[ref_w] += 1
-                continue
             elif ref_w == '<eps>':
                 lst.append(colored(hyp_w, 'green'))
                 ins[hyp_w] += 1
@@ -204,8 +222,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 fh.write(f'{w} ')
             fh.write('\n')
 
-        # Calculate CER
-        if cer:
+        if cer:  # Calculate CER
             def convert_to_char_list(lst):
                 new = []
                 for word in lst:
@@ -217,16 +234,15 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             char_hyp = convert_to_char_list(hyp)
 
             ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
-            # print(utt, ref_int, hyp_int)
             char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
             char_count += len(ref_int)
 
-        # Get OOV CER
-        if oov_set:
+        if oov_set:  # Get OOV CER
             err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
             oov_count_error += err
             oov_count_denom += cnt
 
+    # Outputting metrics from gathered statistics.
     ins_count = sum(ins.values())
     del_count = sum(dels.values())
     sub_count = sum(subs.values())
@@ -266,7 +282,9 @@ def main(
     cer: ('', 'flag', None)=False,
     debug: ("Print debug messages", "flag", "d")=False,
     no_chardiff: ("Don't use character lev distance for alignment", 'flag', None) = False,
-    skip_detailed: ('', 'flag', 's') = False
+    skip_detailed: ('No per utterance output', 'flag', 's') = False,
+    keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
+    not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
 ):
     
     oov_set = []
@@ -276,7 +294,8 @@ def main(
                 oov_set.append(line.split()[0])
         oov_set = set(oov_set)
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
-                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed)
+                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, keywords_list_f=keywords_list_f,
+                  not_score_end=not_score_end)
 
 
 if __name__ == "__main__":

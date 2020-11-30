@@ -154,12 +154,13 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       } else {
         diag_trans_cost = a == b ? 0. : 1.;
       }
-      if (isclose(diagc + diag_trans_cost, current_cost)) {
-        idx = 2;
-      } else if (isclose(upc + up_trans_cost, current_cost)) {
+
+      if (isclose(upc + up_trans_cost, current_cost)) {
         idx = 0;
       } else if (isclose(leftc + left_trans_cost, current_cost)) {
         idx = 1;
+      } else if (isclose(diagc + diag_trans_cost, current_cost)) {
+        idx = 2;
       } else {
         std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<std::endl;
         std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;

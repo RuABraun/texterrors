@@ -1,10 +1,12 @@
 # texterrors
 
-For calculating WER, CER and OOV-CER and getting detailed statistics. 
-
-Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+For calculating WER, CER and OOV-CER and getting detailed statistics.  
 
 Does character aware alignment by default, core is C++ so is fast.
+
+Supports just scoring keywords.
+
+Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
 
 Green - Insertion, Red - Deletion, Purple - Substitution
 
@@ -42,6 +44,8 @@ If you look at the output file with `less` use the `-R` flag to see color.
 # Why is the WER slightly higher than in kaldi ?
 
 **You can make it equal by using the `-no-chardiff` argument.**
+
+[Read here for a longer post with background info](https://ruabraun.github.io/jekyll/update/2020/11/06/On-word-error-rates.html)
 
 This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a difference of ~0.1% absolute.
 
