@@ -129,7 +129,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False):
+                  not_score_end=False, no_freq_sort=False, phrase_f=''):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -158,6 +158,15 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     if keywords_list_f:
         for line in open(keywords_list_f):
             keywords.add(line.strip())
+
+    utt2phrase = {}
+    if phrase_f:
+        for line in open(phrase_f):
+            utt_words = line.split()
+            if len(utt_words) > 1:
+                utt2phrase[utt_words[0]] = utt_words[1:]
+            else:
+                utt2phrase[utt_words[0]] = []
 
     # Done reading input, processing.
     oov_count_denom = 0
@@ -199,6 +208,19 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):
                 if ref_w == hyp_w:
                     last_good_index = i
+        if utt2phrase:  # there should be a smarter way lol
+            phrase = utt2phrase[utt]
+            if not phrase:
+                continue
+            ref_aligned, phrase_aligned, _ = align_texts(ref_aligned, phrase, False)
+            starti = 0
+            while phrase_aligned[starti] == '<eps>':
+                starti += 1
+            endi = len(phrase_aligned) - 1
+            while phrase_aligned[endi] == '<eps>':
+                endi -= 1
+            ref_aligned = ref_aligned[starti: endi + 1]
+            hyp_aligned = hyp_aligned[starti: endi + 1]
         lst = []
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
@@ -223,6 +245,8 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             fh.write('\n')
 
         if cer:  # Calculate CER
+            if phrase_f:
+                raise NotImplementedError('Implementation not done.')
             def convert_to_char_list(lst):
                 new = []
                 for word in lst:
@@ -262,11 +286,11 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
         fh.write(f'Deletions:\n')
-        for v, c in sorted(dels.items(), key=lambda x: x[1], reverse=True)[:count]:
+        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]), reverse=True)[:count]:
             fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
         fh.write('\n')
         fh.write(f'Substitutions:\n')
-        for v, c in sorted(subs.items(), key=lambda x: x[1], reverse=True)[:count]:
+        for v, c in sorted(subs.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]), reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
     if outf:
@@ -283,8 +307,10 @@ def main(
     debug: ("Print debug messages", "flag", "d")=False,
     no_chardiff: ("Don't use character lev distance for alignment", 'flag', None) = False,
     skip_detailed: ('No per utterance output', 'flag', 's') = False,
+    phrase_f: ('Has per utterance phrase which should be scored against, instead of whole utterance', 'option', None) = '',
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
-    not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
+    no_freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
+    not_score_end: ('Errors at the end will not be counted', 'flag', None) = False
 ):
     
     oov_set = []
@@ -295,7 +321,7 @@ def main(
         oov_set = set(oov_set)
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
                  use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, keywords_list_f=keywords_list_f,
-                  not_score_end=not_score_end)
+                  not_score_end=not_score_end, no_freq_sort=no_freq_sort, phrase_f=phrase_f)
 
 
 if __name__ == "__main__":

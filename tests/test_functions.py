@@ -61,6 +61,12 @@ def test_wer():
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 66.67, round(wer, 2)
 
+    ref = 'speedbird eight six two'.split()
+    hyp = 'hello speedbird six two'.split()
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
+    wer = calc_wer(ref_aligned, hyp_aligned)
+    assert round(wer, 2) == 50.0, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
+
 
 def test_oov_cer():
     oov_set = {'airport'}
