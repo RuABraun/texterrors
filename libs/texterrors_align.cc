@@ -150,7 +150,7 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
       double diag_trans_cost;
       if (use_chardiff) {
         diag_trans_cost =
-          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
       } else {
         diag_trans_cost = a == b ? 0. : 1.;
       }
@@ -203,7 +203,7 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
       if (use_chardist) {
         std::string& a = texta[i];
         std::string& b = textb[j];
-        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size()));
+        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
 //        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
         a_cost = 1.0;
         b_cost = 1.0;
