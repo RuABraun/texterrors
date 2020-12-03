@@ -233,7 +233,6 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             ref_aligned = ref_aligned[start_idx: start_idx + ref_offset]
             hyp_aligned = hyp_aligned[start_idx: start_idx + ref_offset]
         lst = []
-        total_count = 0
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
