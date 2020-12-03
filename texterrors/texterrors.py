@@ -194,7 +194,6 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             if not len(ref):  # skip utterance is contains no keywords
                 continue
         hyp = utt_to_text_hyp.get(utt)
-        total_count += len(ref)
         if hyp is None:
             logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
@@ -212,30 +211,46 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             phrase = utt2phrase[utt]
             if not phrase:
                 continue
-            ref_aligned, phrase_aligned, _ = align_texts(ref_aligned, phrase, False)
-            starti = 0
-            while phrase_aligned[starti] == '<eps>':
-                starti += 1
-            endi = len(phrase_aligned) - 1
-            while phrase_aligned[endi] == '<eps>':
-                endi -= 1
-            ref_aligned = ref_aligned[starti: endi + 1]
-            hyp_aligned = hyp_aligned[starti: endi + 1]
+            start_idx = 0
+            word_idx = 0
+            ref_offset = 1
+            while start_idx < len(ref_aligned):
+                if phrase[word_idx] == ref_aligned[start_idx]:
+                    found = True
+                    for i in range(1, len(phrase)):
+                        while ref_aligned[start_idx + ref_offset] == '<eps>':
+                            ref_offset += 1
+                        if phrase[word_idx + i] != ref_aligned[start_idx + ref_offset]:
+                            found = False
+                            ref_offset = 1
+                            break
+                        ref_offset += 1
+                    if found:
+                       break
+                start_idx += 1
+                word_idx = 0
+
+            ref_aligned = ref_aligned[start_idx: start_idx + ref_offset]
+            hyp_aligned = hyp_aligned[start_idx: start_idx + ref_offset]
         lst = []
+        total_count = 0
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
             if ref_w == hyp_w:
                 lst.append(ref_w)
                 word_counts[ref_w] += 1
+                total_count += 1
             elif ref_w == '<eps>':
                 lst.append(colored(hyp_w, 'green'))
                 ins[hyp_w] += 1
             elif hyp_w == '<eps>':
                 lst.append(colored(ref_w, 'red'))
+                total_count += 1
                 dels[ref_w] += 1
                 word_counts[ref_w] += 1
             else:
+                total_count += 1
                 lst.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
                 subs[f'{ref_w} > {hyp_w}'] += 1 
                 word_counts[ref_w] += 1
