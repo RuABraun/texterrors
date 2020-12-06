@@ -173,6 +173,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     oov_count_error = 0
     char_count = 0
     char_error_count = 0
+    utt_correct = 0
 
     ins = defaultdict(int)
     dels = defaultdict(int)
@@ -233,6 +234,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             ref_aligned = ref_aligned[start_idx: start_idx + ref_offset]
             hyp_aligned = hyp_aligned[start_idx: start_idx + ref_offset]
         lst = []
+        was_error = False
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
@@ -240,19 +242,22 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 lst.append(ref_w)
                 word_counts[ref_w] += 1
                 total_count += 1
-            elif ref_w == '<eps>':
-                lst.append(colored(hyp_w, 'green'))
-                ins[hyp_w] += 1
-            elif hyp_w == '<eps>':
-                lst.append(colored(ref_w, 'red'))
-                total_count += 1
-                dels[ref_w] += 1
-                word_counts[ref_w] += 1
             else:
-                total_count += 1
-                lst.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
-                subs[f'{ref_w} > {hyp_w}'] += 1 
-                word_counts[ref_w] += 1
+                was_error = True
+                if ref_w == '<eps>':
+                    lst.append(colored(hyp_w, 'green'))
+                    ins[hyp_w] += 1
+                elif hyp_w == '<eps>':
+                    lst.append(colored(ref_w, 'red'))
+                    total_count += 1
+                    dels[ref_w] += 1
+                    word_counts[ref_w] += 1
+                else:
+                    total_count += 1
+                    lst.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
+                    subs[f'{ref_w} > {hyp_w}'] += 1 
+                    word_counts[ref_w] += 1
+        if not was_error: utt_correct += 1
         if not skip_detailed:
             for w in lst:
                 fh.write(f'{w} ')
@@ -287,7 +292,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     wer = (ins_count + del_count + sub_count) / float(total_count)
     if not skip_detailed:
         fh.write('\n')
-    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\n')
+    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\nSentence accuracy {100.*utt_correct / len(utts):.2f}\n')
 
     if cer:
         cer = char_error_count / float(char_count)
