@@ -4,13 +4,19 @@ For calculating WER, CER and OOV-CER and getting detailed statistics.
 
 Does character aware alignment by default, core is C++ so is fast.
 
-Supports just scoring keywords.
+Supports just scoring keywords or phrases and other things.
 
-Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+See here for [background motivation](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).
 
 Green - Insertion, Red - Deletion, Purple - Substitution
 
 ![Example](docs/images/texterrors_example.png)
+
+Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
+
+# Coming soon
+
+Support for ctm files
 
 # Installing
 Requires minimum python 3.6!
@@ -41,13 +47,22 @@ $ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 ```
 If you look at the output file with `less` use the `-R` flag to see color.
 
+# Options for measuring different things 
+
+`-oov-list-f` - The CER between words aligned to the OOV words will be calculated (the OOV-CER). 
+
+`-keywords-list-f` - The hypothesis is assumed to only contain keywords, the reference is filtered by them before calculating metrics like WER.
+
+`-phrase-f` - If you just want to score a phrase inside an utterance.
+
+
 # Why is the WER slightly higher than in kaldi ?
 
 **You can make it equal by using the `-no-chardiff` argument.**
 
 [Read here for a longer post with background info](https://ruabraun.github.io/jekyll/update/2020/11/06/On-word-error-rates.html)
 
-This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a difference of ~0.1% absolute.
+This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a small difference. 
 
 In the below example a normal WER calculation would do a one-to-one mapping and arrive at a WER of 66.67\%.
 
