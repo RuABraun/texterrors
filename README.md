@@ -1,6 +1,6 @@
 # texterrors
 
-For calculating WER, CER and OOV-CER and getting detailed statistics.  
+For calculating WER, CER, other metrics and getting detailed statistics.  
 
 Does character aware alignment by default, core is C++ so is fast.
 
@@ -14,10 +14,6 @@ Green - Insertion, Red - Deletion, Purple - Substitution
 
 Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
 
-# Coming soon
-
-Support for ctm files
-
 # Installing
 Requires minimum python 3.6!
 ```
@@ -27,7 +23,6 @@ pip install -r requirements.txt
 pip install .
 ```
 The package will be installed as `texterrors`.
-
 
 # Example
 
@@ -49,6 +44,8 @@ If you look at the output file with `less` use the `-R` flag to see color.
 
 # Options you might want to use 
 
+There are more options, call with `-h` to see.
+
 `-isctm` - Will use time stamps for alignment (this will give the best one), last three columns of ctm should be time, duration, word.
 
 `-oov-list-f` - The CER between words aligned to the OOV words will be calculated (the OOV-CER). 
@@ -57,12 +54,9 @@ If you look at the output file with `less` use the `-R` flag to see color.
 
 `-phrase-f` - If you just want to score a phrase inside an utterance.
 
-
 # Why is the WER slightly higher than in kaldi ?
 
 **You can make it equal by using the `-no-chardiff` argument.**
-
-[Read here for a longer post with background info](https://ruabraun.github.io/jekyll/update/2020/11/06/On-word-error-rates.html)
 
 This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a small difference. 
 
