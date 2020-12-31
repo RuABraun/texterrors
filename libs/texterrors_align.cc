@@ -4,6 +4,7 @@
 #include <vector>
 #include <queue>
 #include <iostream>
+#include <math.h>
 
 
 namespace py = pybind11;
@@ -186,6 +187,75 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
   }
 }
 
+void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::vector<std::string> texta,
+                   std::vector<std::string> textb, std::vector<double> times_a, std::vector<double> times_b, bool use_chardiff) {
+  auto buf = array.request();
+  double* cost_mat = (double*) buf.ptr;
+  int32_t numr = array.shape()[0], numc = array.shape()[1];
+
+  if (numr > 32000 || numc > 32000) throw std::runtime_error("Input sequences are too large!");
+
+  std::vector<Pair> bestpath;
+  int i = numr - 1, j = numc - 1;
+  bestpath.emplace_back(i, j);
+  while (i != 0 || j != 0) {
+    double upc, leftc, diagc;
+    int idx;  // 0 up, 1 left, 2 diagonal
+    if (i == 0) {
+      idx = 1;
+    } else if (j == 0) {
+      idx = 0;
+    } else {
+      float current_cost = cost_mat[i * numc + j];
+      upc = cost_mat[(i-1) * numc + j];
+      leftc = cost_mat[i * numc + j - 1];
+      diagc = cost_mat[(i-1) * numc + j - 1];
+      std::string& a = texta[i];
+      std::string& b = textb[j];
+
+      double time_diff = (i == 0 || j == 0) ? 0. : pow(times_a[i-1] - times_b[j-1], 2.);
+      double up_trans_cost = 1.0 + time_diff;
+      double left_trans_cost = 1.0 + time_diff;
+      double diag_trans_cost;
+      if (use_chardiff) {
+        diag_trans_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5 + time_diff;
+      } else {
+        diag_trans_cost = a == b ? 0. + time_diff : 1. + time_diff;
+      }
+
+      if (isclose(upc + up_trans_cost, current_cost)) {
+        idx = 0;
+      } else if (isclose(leftc + left_trans_cost, current_cost)) {
+        idx = 1;
+      } else if (isclose(diagc + diag_trans_cost, current_cost)) {
+        idx = 2;
+      } else {
+        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<" times " << times_a[i] << " "<<times_b[j]<<std::endl;
+        std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;
+        std::cout << diag_trans_cost + diagc <<" "<<current_cost <<std::endl;
+        throw std::runtime_error("Should not be possible !");
+      }
+    }
+
+    if (idx == 0) {
+      i--;
+    } else if (idx == 1) {
+      j--;
+    } else if (idx == 2) {
+      i--, j--;
+    }
+    bestpath.emplace_back(i, j);
+  }
+
+  if (bestpath.size() == 1) throw std::runtime_error("No best path found!");
+  for (int32_t k = 0; k < bestpath.size(); k++) {
+    bestpath_lst.append(bestpath[k].i);
+    bestpath_lst.append(bestpath[k].j);
+  }
+}
+
+
 
 int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
                          std::vector<std::string>& textb, bool use_chardist) {
@@ -238,10 +308,63 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
 }
 
 
+int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta,
+                         std::vector<std::string>& textb, std::vector<double> times_a, std::vector<double> times_b, bool use_chardist) {
+  if ( array.ndim() != 2 )
+    throw std::runtime_error("Input should be 2-D NumPy array");
+
+  int M = array.shape()[0], N = array.shape()[1];
+  if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
+  auto buf = array.request();
+  double* ptr = (double*) buf.ptr;
+//  std::cout << "STARTING"<<std::endl;
+  for(int32 i = 0; i < M; i++) {
+    for(int32 j = 0; j < N; j++) {
+      double transition_cost, a_cost, b_cost;
+      double time_diff = (i == 0 || j == 0) ? 0. : pow(times_a[i-1] - times_b[j-1], 2.);
+      if (use_chardist) {
+        std::string& a = texta[i];
+        std::string& b = textb[j];
+        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5 + time_diff;
+//        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
+        a_cost = 1. + time_diff;
+        b_cost = 1. + time_diff;
+      } else {
+        a_cost = 1. + time_diff;
+        b_cost = 1. + time_diff;
+        transition_cost = texta[i] == textb[j] ? 0. + time_diff : 1. + time_diff;
+      }
+
+      if (i == 0 && j == 0) {
+        ptr[0] = 0;
+        continue;
+      }
+      if (i == 0)  {
+        ptr[j] = ptr[j - 1] + b_cost;
+        continue;
+      }
+      if (j == 0) {
+        ptr[i * N] = ptr[(i-1) * N] + a_cost;
+        continue;
+      }
+
+      double upc = ptr[(i-1) * N + j] + a_cost;
+      double leftc = ptr[i * N + j - 1] + b_cost;
+      double diagc = ptr[(i-1) * N + j - 1] + transition_cost;
+      double sum = std::min(upc, std::min(leftc, diagc));
+      ptr[i * N + j] = sum;
+    }
+  }
+//  std::cout << "DONE"<<std::endl;
+  return ptr[0];  // TODO: FIX
+}
+
 PYBIND11_MODULE(texterrors_align,m) {
   m.doc() = "pybind11 plugin";
   m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
+  m.def("calc_sum_cost_ctm", &calc_sum_cost_ctm, "Calculate summed cost matrix");
   m.def("get_best_path", &get_best_path, "get_best_path");
+  m.def("get_best_path_ctm", &get_best_path_ctm, "get_best_path_ctm");
   m.def("lev_distance", lev_distance<int>);
   m.def("lev_distance", lev_distance<char>);
   m.def("lev_distance_str", &lev_distance_str);

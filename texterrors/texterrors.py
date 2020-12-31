@@ -87,6 +87,64 @@ def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
     return aligned_a, aligned_b, cost
 
 
+def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, debug, insert_tok):
+    print(times_a, times_b)
+    len_a = len(text_a_str)
+    len_b = len(text_b_str)
+    # doing dynamic time warp
+    text_a_str = [insert_tok] + text_a_str
+    text_b_str = [insert_tok] + text_b_str
+    # +1 because of padded start token
+    summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
+    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b, use_chardiff)
+
+    if debug:
+        np.set_printoptions(linewidth=300)
+        np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
+    best_path_lst = []
+    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a, times_b, use_chardiff)
+    assert len(best_path_lst) % 2 == 0
+    path = []
+    for n in range(0, len(best_path_lst), 2):
+        i = best_path_lst[n]
+        j = best_path_lst[n + 1]
+        path.append((i, j))
+
+    # convert hook (up left or left up) transitions to diag, not important.
+    # -1 because of padding tokens, i = 1 because first is given
+    newpath = [path[0]]
+    i = 1
+    lasttpl = path[0]
+    while i < len(path) - 1:
+        tpl = path[i]
+        nexttpl = path[i + 1]
+        if (
+            lasttpl[0] - 1 == nexttpl[0] and lasttpl[1] - 1 == nexttpl[1]
+        ):  # minus because reversed
+            pass
+        else:
+            newpath.append(tpl)
+        i += 1
+        lasttpl = tpl
+    path = newpath
+
+    aligned_a, aligned_b = [], []
+    lasti, lastj = -1, -1
+    for i, j in list(reversed(path)):
+        # print(text_a[i], text_b[i], file=sys.stderr)
+        if i != lasti:
+            aligned_a.append(text_a_str[i])
+        else:
+            aligned_a.append(insert_tok)
+        if j != lastj:
+            aligned_b.append(text_b_str[j])
+        else:
+            aligned_b.append(insert_tok)
+        lasti, lastj = i, j
+
+    return aligned_a, aligned_b, cost
+
+
 def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
     assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
@@ -99,6 +157,83 @@ def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
         print(aligned_a)
         print(aligned_b)
     return aligned_a, aligned_b, cost
+
+
+def get_overlap(refw, hypw):
+    # 0 if match, -1 if hyp before, 1 if after
+    if hypw[1] < refw[1]:
+        neg_offset = refw[1] - hypw[1]
+        if neg_offset < hypw[2] * 0.5:
+            return 0
+        else:
+            return -1
+    else:
+        pos_offset = hypw[1] - refw[1]
+        if pos_offset < hypw[2] * 0.5:
+            return 0
+        else:
+            return 1
+
+
+def align_from_ctms(ref, hyp, insert_tok):
+    # First do alignment which allows many hyp to one ref.
+    ref_idx = 0
+    hyp_idx = 0
+    hyp_to_refidx = []
+    while hyp_idx < len(hyp):
+        ref_wordo = ref[ref_idx]
+        hyp_wordo = hyp[hyp_idx]
+        overlap = get_overlap(ref_wordo, hyp_wordo)
+        print(overlap, ref_wordo[0], ref_idx, ref_wordo[1], hyp_wordo[0], hyp_idx, hyp_wordo[1])
+        if overlap == 0:
+            hyp_to_refidx.append(ref_idx)
+            hyp_idx += 1
+        elif overlap == -1:
+            hyp_to_refidx.append(None)
+            hyp_idx += 1
+        else:
+            ref_idx += 1
+    print(hyp_to_refidx)
+    ref_aligned = []
+    hyp_aligned = []
+    prev_idx = -1
+    i = 0
+    while i < len(hyp_to_refidx):
+        idx = hyp_to_refidx[i]
+        print(i, idx)
+        if idx is None:
+            ref_aligned.append(insert_tok)
+            hyp_aligned.append(hyp[i][0])
+            i += 1
+        else:
+            diff = idx - prev_idx
+            if diff > 1:
+                for j in range(diff):
+                    ref_aligned.append(ref[prev_idx + j + 1][0])
+                    hyp_aligned.append(insert_tok)
+
+            # Take care of many to one
+            starti = i
+            while i + 1 < len(hyp_to_refidx) and hyp_to_refidx[i+1] == idx: i += 1
+            if starti == i:
+                ref_aligned.append(ref[idx][0])
+                hyp_aligned.append(hyp[i][0])
+            else:
+                refw = ref[idx][0]
+                diffs = [lev_distance(refw, hyp[n][0]) for n in range(starti, i+1)]
+                min_idx = min(range(len(diffs)), key=lambda x: diffs[x])
+                for n in range(starti, i + 1):
+                    if n != min_idx + starti:
+                        ref_aligned.append(insert_tok)
+                        hyp_aligned.append(hyp[n][0])
+                    else:
+                        ref_aligned.append(ref[idx][0])
+                        hyp_aligned.append(hyp[n][0])
+            i += 1
+        #print('lens', len(ref_aligned), len(hyp_aligned))
+        if idx is not None:
+            prev_idx = idx
+    return ref_aligned, hyp_aligned
 
 
 def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
@@ -127,9 +262,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
     return oov_count_error, oov_count_denom
 
 
-def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
-                  use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False, no_freq_sort=False, phrase_f=''):
+def read_ark_files(ref_f, hyp_f, isark):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -153,6 +286,34 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             else:
                 words = line.split()
                 utt_to_text_hyp[i] = [w for w in words if w != '<unk>']
+    return utt_to_text_ref, utt_to_text_hyp, utts
+
+
+def read_ctm_files(ref_f, hyp_f):
+    """ Assumes first field is utt and last three fields are word, time, duration """
+    def read_ctm_file(f):
+        utt_to_wordtimes = defaultdict(list)
+        current_utt = None
+        with open(f) as fh:
+            for line in fh:
+                utt, *_, time, dur, word = line.split()
+                time = float(time)
+                dur = float(dur)
+                utt_to_wordtimes[utt].append((word, time, dur,))
+        return utt_to_wordtimes
+    utt_to_ref = read_ctm_file(ref_f)
+    utt_to_hyp = read_ctm_file(hyp_f)
+    utts = list(utt_to_ref.keys())
+    return utt_to_ref, utt_to_hyp, utts
+
+
+def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
+                  use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
+                  not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False):
+    if not isctm:
+        utt_to_text_ref, utt_to_text_hyp, utts = read_ark_files(ref_f, hyp_f, isark)
+    else:
+        utt_to_text_ref, utt_to_text_hyp, utts = read_ctm_files(ref_f, hyp_f)
 
     keywords = set()
     if keywords_list_f:
@@ -173,13 +334,12 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     oov_count_error = 0
     char_count = 0
     char_error_count = 0
-    utt_correct = 0
+    utt_wrong = 0
 
     ins = defaultdict(int)
     dels = defaultdict(int)
-    subs = defaultdict(int)        
+    subs = defaultdict(int)
     total_count = 0
-    cost_total = 0
     word_counts = defaultdict(int)
     if outf:
         fh = open(outf, 'w')
@@ -199,8 +359,18 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
 
-        ref_aligned, hyp_aligned, cost = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
-        cost_total += cost
+        if not isctm:
+            ref_aligned, hyp_aligned, _ = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
+        else:
+            ref_words = [e[0] for e in ref]
+            hyp_words = [e[0] for e in hyp]
+            ref_times = [e[1] for e in ref]
+            hyp_times = [e[1] for e in hyp]
+            ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times, hyp_times, use_chardiff, debug, insert_tok)
+        print(ref_aligned)
+        print(hyp_aligned)
+        print(len(ref_aligned))
+
         if not skip_detailed:
             fh.write(f'{utt}\n')
         if not_score_end:
@@ -255,9 +425,9 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 else:
                     total_count += 1
                     lst.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
-                    subs[f'{ref_w} > {hyp_w}'] += 1 
+                    subs[f'{ref_w} > {hyp_w}'] += 1
                     word_counts[ref_w] += 1
-        if not was_error: utt_correct += 1
+        if was_error: utt_wrong += 1
         if not skip_detailed:
             for w in lst:
                 fh.write(f'{w} ')
@@ -292,7 +462,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     wer = (ins_count + del_count + sub_count) / float(total_count)
     if not skip_detailed:
         fh.write('\n')
-    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\nSentence accuracy {100.*utt_correct / len(utts):.2f}\n')
+    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\nSER: {100.*utt_wrong / len(utts):.2f}\n')
 
     if cer:
         cer = char_error_count / float(char_count)
@@ -322,6 +492,7 @@ def main(
     outf: ('Optional output file') = '',
     oov_list_f: ('List of OOVs', 'option', None) = '',
     isark: ('', 'flag', None)=False,
+    isctm: ('', 'flag', None)=False,
     cer: ('', 'flag', None)=False,
     debug: ("Print debug messages", "flag", "d")=False,
     no_chardiff: ("Don't use character lev distance for alignment", 'flag', None) = False,
@@ -331,7 +502,7 @@ def main(
     no_freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False
 ):
-    
+
     oov_set = []
     if oov_list_f:
         with open(oov_list_f) as fh:
@@ -340,7 +511,7 @@ def main(
         oov_set = set(oov_set)
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
                  use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, keywords_list_f=keywords_list_f,
-                  not_score_end=not_score_end, no_freq_sort=no_freq_sort, phrase_f=phrase_f)
+                  not_score_end=not_score_end, no_freq_sort=no_freq_sort, phrase_f=phrase_f, isctm=isctm)
 
 
 if __name__ == "__main__":
