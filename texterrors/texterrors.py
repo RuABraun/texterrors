@@ -88,7 +88,6 @@ def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
 
 
 def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, debug, insert_tok):
-    print(times_a, times_b)
     len_a = len(text_a_str)
     len_b = len(text_b_str)
     # doing dynamic time warp
@@ -173,67 +172,6 @@ def get_overlap(refw, hypw):
             return 0
         else:
             return 1
-
-
-def align_from_ctms(ref, hyp, insert_tok):
-    # First do alignment which allows many hyp to one ref.
-    ref_idx = 0
-    hyp_idx = 0
-    hyp_to_refidx = []
-    while hyp_idx < len(hyp):
-        ref_wordo = ref[ref_idx]
-        hyp_wordo = hyp[hyp_idx]
-        overlap = get_overlap(ref_wordo, hyp_wordo)
-        print(overlap, ref_wordo[0], ref_idx, ref_wordo[1], hyp_wordo[0], hyp_idx, hyp_wordo[1])
-        if overlap == 0:
-            hyp_to_refidx.append(ref_idx)
-            hyp_idx += 1
-        elif overlap == -1:
-            hyp_to_refidx.append(None)
-            hyp_idx += 1
-        else:
-            ref_idx += 1
-    print(hyp_to_refidx)
-    ref_aligned = []
-    hyp_aligned = []
-    prev_idx = -1
-    i = 0
-    while i < len(hyp_to_refidx):
-        idx = hyp_to_refidx[i]
-        print(i, idx)
-        if idx is None:
-            ref_aligned.append(insert_tok)
-            hyp_aligned.append(hyp[i][0])
-            i += 1
-        else:
-            diff = idx - prev_idx
-            if diff > 1:
-                for j in range(diff):
-                    ref_aligned.append(ref[prev_idx + j + 1][0])
-                    hyp_aligned.append(insert_tok)
-
-            # Take care of many to one
-            starti = i
-            while i + 1 < len(hyp_to_refidx) and hyp_to_refidx[i+1] == idx: i += 1
-            if starti == i:
-                ref_aligned.append(ref[idx][0])
-                hyp_aligned.append(hyp[i][0])
-            else:
-                refw = ref[idx][0]
-                diffs = [lev_distance(refw, hyp[n][0]) for n in range(starti, i+1)]
-                min_idx = min(range(len(diffs)), key=lambda x: diffs[x])
-                for n in range(starti, i + 1):
-                    if n != min_idx + starti:
-                        ref_aligned.append(insert_tok)
-                        hyp_aligned.append(hyp[n][0])
-                    else:
-                        ref_aligned.append(ref[idx][0])
-                        hyp_aligned.append(hyp[n][0])
-            i += 1
-        #print('lens', len(ref_aligned), len(hyp_aligned))
-        if idx is not None:
-            prev_idx = idx
-    return ref_aligned, hyp_aligned
 
 
 def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
@@ -367,9 +305,6 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             ref_times = [e[1] for e in ref]
             hyp_times = [e[1] for e in hyp]
             ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times, hyp_times, use_chardiff, debug, insert_tok)
-        print(ref_aligned)
-        print(hyp_aligned)
-        print(len(ref_aligned))
 
         if not skip_detailed:
             fh.write(f'{utt}\n')

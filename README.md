@@ -47,7 +47,9 @@ $ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 ```
 If you look at the output file with `less` use the `-R` flag to see color.
 
-# Options for measuring different things 
+# Options you might want to use 
+
+`-isctm` - Will use time stamps for alignment (this will give the best one), last three columns of ctm should be time, duration, word.
 
 `-oov-list-f` - The CER between words aligned to the OOV words will be calculated (the OOV-CER). 
 
