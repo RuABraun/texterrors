@@ -373,10 +373,11 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 raise NotImplementedError('Implementation not done.')
             def convert_to_char_list(lst):
                 new = []
-                for word in lst:
+                for i, word in enumerate(lst):
                     for c in word:
                         new.append(c)
-                    new.append(' ')
+                    if i != len(lst) - 1:
+                        new.append(' ')
                 return new
             char_ref = convert_to_char_list(ref)
             char_hyp = convert_to_char_list(hyp)
@@ -401,7 +402,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
 
     if cer:
         cer = char_error_count / float(char_count)
-        fh.write(f'CER: {100.*cer:.2f}\n')
+        fh.write(f'CER: {100.*cer:.2f} ({char_error_count} / {char_count})\n')
     if oov_set:
         fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.2f}\n')
     if not skip_detailed:
