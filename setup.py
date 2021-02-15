@@ -1,7 +1,8 @@
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
-import sys
+import os
 import setuptools
+import sys
 
 __version__ = "0.0.1"
 
@@ -87,6 +88,14 @@ class BuildExt(build_ext):
         build_ext.build_extensions(self)
 
 
+def get_requires():
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    req_path = os.path.join(base_dir, 'requirements.txt')
+    install_requires = open(req_path).read().splitlines()
+    return install_requires
+
+
+
 setup(
     name="texterrors",
     version=__version__,
@@ -98,5 +107,6 @@ setup(
     long_description="BLABLA",
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExt},
-    scripts=['texterrors/texterrors.py']
+    scripts=['texterrors/texterrors.py'],
+    install_requires=get_requires()
 )
