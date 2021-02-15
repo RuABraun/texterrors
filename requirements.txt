@@ -3,3 +3,4 @@ plac
 numpy
 loguru
 termcolor
+Levenshtein
