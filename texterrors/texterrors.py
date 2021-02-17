@@ -288,6 +288,10 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     dct_char = {insert_tok: 0, 0: insert_tok}
     for utt in utts:
         ref = utt_to_text_ref[utt]
+        if utt2phrase:
+            phrase = utt2phrase[utt]
+            assert phrase in ref, f'A phrase ({phrase}) does not exist in the reference (uttid: {utt})! The phrase' \
+                                  f' must be contained in the reference text! Exiting.'
         if keywords:
             ref = [w for w in ref if w in keywords]
             if not len(ref):  # skip utterance is contains no keywords
