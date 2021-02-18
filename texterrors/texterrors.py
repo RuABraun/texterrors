@@ -289,8 +289,10 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     for utt in utts:
         ref = utt_to_text_ref[utt]
         if utt2phrase:
-            phrase = utt2phrase[utt]
-            is_contained = any(ref[i: i + len(phrase)] == phrase for i in range(len(ref)-len(phrase)))
+            phrase = utt2phrase.get(utt)
+            if not phrase:
+                continue
+            is_contained = any([ref[i: i + len(phrase)] == phrase for i in range(len(ref)-len(phrase) + 1)])
             assert is_contained, f'A phrase ({phrase}) does not exist in the reference (uttid: {utt})! The phrase' \
                                   f' must be contained in the reference text! Exiting.'
         if keywords:
