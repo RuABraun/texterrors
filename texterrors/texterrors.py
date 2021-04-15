@@ -95,14 +95,14 @@ def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, deb
     text_b_str = [insert_tok] + text_b_str
     # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
-    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b, 
+    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b,
         use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
     best_path_lst = []
-    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a, 
+    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a,
         times_b, use_chardiff)
     assert len(best_path_lst) % 2 == 0
     path = []
@@ -275,6 +275,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         group_stats = {}
         for line in open(utt_group_map_f):
             uttid, group = line.split(maxsplit=1)
+            group = group.strip()
             utt_group_map[uttid] = group
             group_stats[group] = {}
             group_stats[group]['count'] = 0
@@ -327,7 +328,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             hyp_words = [e[0] for e in hyp]
             ref_times = [e[1] for e in ref]
             hyp_times = [e[1] for e in hyp]
-            ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times, 
+            ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times,
                 hyp_times, use_chardiff, debug, insert_tok)
 
         if not skip_detailed:
@@ -365,13 +366,14 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             hyp_aligned = hyp_aligned[start_idx: start_idx + ref_offset]
         colored_output = []
         error_count = 0
+        ref_word_count = 0
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
             if ref_w == hyp_w:
                 colored_output.append(ref_w)
                 word_counts[ref_w] += 1
-                total_count += 1
+                ref_word_count += 1
             else:
                 error_count += 1
                 if ref_w == '<eps>':
@@ -379,14 +381,15 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                     ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
                     colored_output.append(colored(ref_w, 'red'))
-                    total_count += 1
+                    ref_word_count += 1
                     dels[ref_w] += 1
                     word_counts[ref_w] += 1
                 else:
-                    total_count += 1
+                    ref_word_count += 1
                     colored_output.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
                     subs[f'{ref_w} > {hyp_w}'] += 1
                     word_counts[ref_w] += 1
+        total_count += ref_word_count
         if not skip_detailed:
             for w in colored_output:
                 fh.write(f'{w} ')
@@ -394,7 +397,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
 
         if utt_group_map_f:
             group = utt_group_map[utt]
-            group_stats[group]['count'] += total_count
+            group_stats[group]['count'] += ref_word_count
             group_stats[group]['errors'] += error_count
 
         if error_count: utt_wrong += 1
@@ -440,23 +443,23 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     if utt_group_map_f:
         fh.write('Group WERS:\n')
         for group, stats in group_stats.items():
-            wer = 100. * (stats['errors'] / stats['counts'])
-            fh.write(f'{group} {wer:.1f}\n')
+            wer = 100. * (stats['errors'] / float(stats['count']))
+            fh.write(f'{group}\t{wer:.1f}\n')
         fh.write('\n')
-            
+
     if not skip_detailed:
         fh.write(f'\nInsertions:\n')
         for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:count]:
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
         fh.write(f'Deletions:\n')
-        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]), 
+        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]),
                            reverse=True)[:count]:
             fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
         fh.write('\n')
         fh.write(f'Substitutions:\n')
-        for v, c in sorted(subs.items(), 
-                           key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]), 
+        for v, c in sorted(subs.items(),
+                           key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]),
                            reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
@@ -479,9 +482,8 @@ def main(
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
     no_freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
-    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group', 
-        'option', '') = '')
-):
+    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
+        'option', '') = ''):
 
     oov_set = []
     if oov_list_f:
@@ -490,8 +492,8 @@ def main(
                 oov_set.append(line.split()[0])
         oov_set = set(oov_set)
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
-                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, 
-                 keywords_list_f=keywords_list_f, not_score_end=not_score_end, 
+                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed,
+                 keywords_list_f=keywords_list_f, not_score_end=not_score_end,
                  no_freq_sort=no_freq_sort, phrase_f=phrase_f, isctm=isctm,
                  utt_group_map_f=utt_group_map_f)
 

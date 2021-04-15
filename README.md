@@ -4,7 +4,7 @@ For calculating WER, CER, other metrics and getting detailed statistics.
 
 Does character aware alignment by default, core is C++ so is fast.
 
-Supports just scoring keywords or phrases and other things. Meant to replace older tools like `sclite` by being easy to use, modify and extend.
+Supports scoring by group (for example by speaker) or just scoring keywords or phrases and other things. Meant to replace older tools like `sclite` by being easy to use, modify and extend.
 
 See here for [background motivation](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).
 
