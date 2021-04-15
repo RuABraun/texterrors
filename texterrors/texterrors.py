@@ -95,13 +95,15 @@ def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, deb
     text_b_str = [insert_tok] + text_b_str
     # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
-    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b, use_chardiff)
+    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b, 
+        use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
     best_path_lst = []
-    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a, times_b, use_chardiff)
+    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a, 
+        times_b, use_chardiff)
     assert len(best_path_lst) % 2 == 0
     path = []
     for n in range(0, len(best_path_lst), 2):
@@ -200,7 +202,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
     return oov_count_error, oov_count_denom
 
 
-def read_ark_files(ref_f, hyp_f, isark):
+def read_files(ref_f, hyp_f, isark):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -247,15 +249,16 @@ def read_ctm_files(ref_f, hyp_f):
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False):
+                  not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
     if not isctm:
-        utt_to_text_ref, utt_to_text_hyp, utts = read_ark_files(ref_f, hyp_f, isark)
+        utt_to_text_ref, utt_to_text_hyp, utts = read_files(ref_f, hyp_f, isark)
     else:
         utt_to_text_ref, utt_to_text_hyp, utts = read_ctm_files(ref_f, hyp_f)
 
     keywords = set()
     if keywords_list_f:
         for line in open(keywords_list_f):
+            assert len(line.split()) == 1, 'A keyword must be a single word!'
             keywords.add(line.strip())
 
     utt2phrase = {}
@@ -266,6 +269,21 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 utt2phrase[utt_words[0]] = utt_words[1:]
             else:
                 utt2phrase[utt_words[0]] = []
+
+    if utt_group_map_f:
+        utt_group_map = {}
+        group_stats = {}
+        for line in open(utt_group_map_f):
+            uttid, group = line.split(maxsplit=1)
+            utt_group_map[uttid] = group
+            group_stats[group] = {}
+            group_stats[group]['count'] = 0
+            group_stats[group]['errors'] = 0
+
+    if outf:
+        fh = open(outf, 'w')
+    else:
+        import sys; fh = sys.stdout
 
     # Done reading input, processing.
     oov_count_denom = 0
@@ -279,10 +297,6 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     subs = defaultdict(int)
     total_count = 0
     word_counts = defaultdict(int)
-    if outf:
-        fh = open(outf, 'w')
-    else:
-        import sys; fh = sys.stdout
     if not skip_detailed:
         fh.write('Per utt details:\n')
     dct_char = {insert_tok: 0, 0: insert_tok}
@@ -313,7 +327,8 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             hyp_words = [e[0] for e in hyp]
             ref_times = [e[1] for e in ref]
             hyp_times = [e[1] for e in hyp]
-            ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times, hyp_times, use_chardiff, debug, insert_tok)
+            ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times, 
+                hyp_times, use_chardiff, debug, insert_tok)
 
         if not skip_detailed:
             fh.write(f'{utt}\n')
@@ -322,7 +337,8 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):
                 if ref_w == hyp_w:
                     last_good_index = i
-        if utt2phrase:  # there should be a smarter way lol
+        # Finds phrase in reference. There should be a smarter way lol
+        if utt2phrase:
             phrase = utt2phrase[utt]
             if not phrase:
                 continue
@@ -347,39 +363,45 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
 
             ref_aligned = ref_aligned[start_idx: start_idx + ref_offset]
             hyp_aligned = hyp_aligned[start_idx: start_idx + ref_offset]
-        lst = []
-        was_error = False
+        colored_output = []
+        error_count = 0
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
             if ref_w == hyp_w:
-                lst.append(ref_w)
+                colored_output.append(ref_w)
                 word_counts[ref_w] += 1
                 total_count += 1
             else:
-                was_error = True
+                error_count += 1
                 if ref_w == '<eps>':
-                    lst.append(colored(hyp_w, 'green'))
+                    colored_output.append(colored(hyp_w, 'green'))
                     ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
-                    lst.append(colored(ref_w, 'red'))
+                    colored_output.append(colored(ref_w, 'red'))
                     total_count += 1
                     dels[ref_w] += 1
                     word_counts[ref_w] += 1
                 else:
                     total_count += 1
-                    lst.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
+                    colored_output.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
                     subs[f'{ref_w} > {hyp_w}'] += 1
                     word_counts[ref_w] += 1
-        if was_error: utt_wrong += 1
         if not skip_detailed:
-            for w in lst:
+            for w in colored_output:
                 fh.write(f'{w} ')
             fh.write('\n')
 
+        if utt_group_map_f:
+            group = utt_group_map[utt]
+            group_stats[group]['count'] += total_count
+            group_stats[group]['errors'] += error_count
+
+        if error_count: utt_wrong += 1
+
         if cer:  # Calculate CER
             if phrase_f:
-                raise NotImplementedError('Implementation not done.')
+                raise NotImplementedError('Implementation for CER of phrases not done.')
             def convert_to_char_list(lst):
                 new = []
                 for i, word in enumerate(lst):
@@ -407,24 +429,35 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     wer = (ins_count + del_count + sub_count) / float(total_count)
     if not skip_detailed:
         fh.write('\n')
-    fh.write(f'WER: {100.*wer:.2f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})\nSER: {100.*utt_wrong / len(utts):.2f}\n')
+    fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})'
+             f'\nSER: {100.*utt_wrong / len(utts):.1f}\n')
 
     if cer:
         cer = char_error_count / float(char_count)
-        fh.write(f'CER: {100.*cer:.2f} ({char_error_count} / {char_count})\n')
+        fh.write(f'CER: {100.*cer:.1f} ({char_error_count} / {char_count})\n')
     if oov_set:
-        fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.2f}\n')
+        fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.1f}\n')
+    if utt_group_map_f:
+        fh.write('Group WERS:\n')
+        for group, stats in group_stats.items():
+            wer = 100. * (stats['errors'] / stats['counts'])
+            fh.write(f'{group} {wer:.1f}\n')
+        fh.write('\n')
+            
     if not skip_detailed:
         fh.write(f'\nInsertions:\n')
         for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:count]:
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
         fh.write(f'Deletions:\n')
-        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]), reverse=True)[:count]:
+        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]), 
+                           reverse=True)[:count]:
             fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
         fh.write('\n')
         fh.write(f'Substitutions:\n')
-        for v, c in sorted(subs.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]), reverse=True)[:count]:
+        for v, c in sorted(subs.items(), 
+                           key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]), 
+                           reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
     if outf:
@@ -445,7 +478,9 @@ def main(
     phrase_f: ('Has per utterance phrase which should be scored against, instead of whole utterance', 'option', None) = '',
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
     no_freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
-    not_score_end: ('Errors at the end will not be counted', 'flag', None) = False
+    not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
+    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group', 
+        'option', '') = '')
 ):
 
     oov_set = []
@@ -455,8 +490,10 @@ def main(
                 oov_set.append(line.split()[0])
         oov_set = set(oov_set)
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
-                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, keywords_list_f=keywords_list_f,
-                  not_score_end=not_score_end, no_freq_sort=no_freq_sort, phrase_f=phrase_f, isctm=isctm)
+                 use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed, 
+                 keywords_list_f=keywords_list_f, not_score_end=not_score_end, 
+                 no_freq_sort=no_freq_sort, phrase_f=phrase_f, isctm=isctm,
+                 utt_group_map_f=utt_group_map_f)
 
 
 if __name__ == "__main__":

@@ -46,6 +46,9 @@ If you look at the output file with `less` use the `-R` flag to see color.
 
 There are more options, call with `-h` to see.
 
+`-utt-group-map` - Should be a file which maps uttids to group, WER will be output per group (could use
+to get per speaker WER for example).
+
 `-isctm` - Will use time stamps for alignment (this will give the best one), last three columns of ctm should be time, duration, word.
 
 `-oov-list-f` - The CER between words aligned to the OOV words will be calculated (the OOV-CER). 
