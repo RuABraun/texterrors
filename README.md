@@ -15,12 +15,10 @@ Green - Insertion, Red - Deletion, Purple - Substitution
 Colored output is based on the [werpp](https://github.com/nsmartinez/WERpp) package by https://github.com/nsmartinez
 
 # Installing
-Requires minimum python 3.6!
+Requires minimum python 3.6! And the `pybind11` package should already be installed.
 ```
-git clone https://github.com/RuABraun/texterrors.git
-cd texterrors
-pip install -r requirements.txt
-pip install .
+git clone --recurse-submodules git@github.com:RuABraun/texterrors.git
+python -m pip install texterrors/
 ```
 The package will be installed as `texterrors`.
 
