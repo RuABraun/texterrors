@@ -6,8 +6,7 @@ def test_levd():
     pairs = ['a', '', '', 'a', 'MOZILLA', 'MUSIAL', 'ARE', 'MOZILLA', 'TURNIPS', 'TENTH', 'POSTERS', 'POSTURE']
     for a, b in zip(pairs[:-1:2], pairs[1::2]):
         d1 = texterrors.lev_distance(a, b)
-        # print(a, b, d1)
-        d2 = texterrors.lev_distance(a, b)
+        d2 = levd.distance(a, b)
         if d1 != d2:
             print(a, b, d1, d2)
             raise RuntimeError('Assert failed!')
@@ -81,6 +80,8 @@ def test_oov_cer():
     assert err / cnt == 0., err / cnt
 
 
+print('Reminder: texterrors needs to be installed')
 test_levd()
 test_wer()
 test_oov_cer()
+print('Passed!')
