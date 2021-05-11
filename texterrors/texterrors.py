@@ -250,6 +250,7 @@ def read_ctm_files(ref_f, hyp_f):
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
                   not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
+    is_above_three_six = sys.version_info[1] >= 7
     if not isctm:
         utt_to_text_ref, utt_to_text_hyp, utts = read_files(ref_f, hyp_f, isark)
     else:
@@ -284,7 +285,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     if outf:
         fh = open(outf, 'w')
     else:
-        import sys; fh = sys.stdout
+        fh = sys.stdout
 
     # Done reading input, processing.
     oov_count_denom = 0
@@ -371,28 +372,51 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             if not_score_end and i > last_good_index:
                 break
             if ref_w == hyp_w:
-                colored_output.append(ref_w)
+                colored_output.append((ref_w, len(ref_w),))
                 word_counts[ref_w] += 1
                 ref_word_count += 1
             else:
                 error_count += 1
                 if ref_w == '<eps>':
-                    colored_output.append(colored(hyp_w, 'green'))
+                    colored_output.append((colored(hyp_w, 'green'), len(hyp_w),))
                     ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
-                    colored_output.append(colored(ref_w, 'red'))
+                    colored_output.append((colored(ref_w, 'red'), len(ref_w),))
                     ref_word_count += 1
                     dels[ref_w] += 1
                     word_counts[ref_w] += 1
                 else:
                     ref_word_count += 1
-                    colored_output.append(colored(f'{ref_w} > {hyp_w}', 'magenta'))
-                    subs[f'{ref_w} > {hyp_w}'] += 1
+                    key = f'{ref_w}>{hyp_w}'
+                    colored_output.append(key)
+                    subs[key] += 1
                     word_counts[ref_w] += 1
         total_count += ref_word_count
         if not skip_detailed:
-            for w in colored_output:
-                fh.write(f'{w} ')
+            length = -1
+            word_to_pos = {}
+            for entry in colored_output:
+                if isinstance(entry, tuple):
+                    len_word = entry[1]
+                    w = entry[0]
+                    length += len_word
+                    fh.write(f'{w} ')
+                else:
+                    ref_w, hyp_w = entry.split('>')
+                    larger_len = max(len(ref_w), len(hyp_w))
+                    hyp_w = colored(hyp_w, 'green')
+                    length += larger_len
+                    word_to_pos[ref_w] = length
+                    fh.write(f'{hyp_w:^{larger_len+9}} ')
+                length += 1
+            fh.write('\n')
+            it = word_to_pos.items() if is_above_three_six else sorted(word_to_pos.items(), key=lambda x: x[1])
+            for word, length in it:
+                len_word = len(word)
+                pos = length - len_word
+                word = colored(word, 'red')
+                fh.write(' ' * pos)
+                fh.write(f' {word:^{len_word+9}}')
             fh.write('\n')
 
         if utt_group_map_f:
