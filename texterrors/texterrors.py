@@ -301,7 +301,7 @@ class DoubleLine:
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
+                  not_score_end=False, freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
     is_above_three_six = sys.version_info[1] >= 7
     terminal_width, _ = shutil.get_terminal_size()
     if not isctm:
@@ -510,13 +510,13 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             fh.write(f'{v}\t{c}\n')
         fh.write('\n')
         fh.write(f'Deletions:\n')
-        for v, c in sorted(dels.items(), key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0]]),
+        for v, c in sorted(dels.items(), key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0]]),
                            reverse=True)[:count]:
             fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
         fh.write('\n')
         fh.write(f'Substitutions:\n')
         for v, c in sorted(subs.items(),
-                           key=lambda x: (x[1] if no_freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]),
+                           key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]),
                            reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
@@ -537,7 +537,7 @@ def main(
     skip_detailed: ('No per utterance output', 'flag', 's') = False,
     phrase_f: ('Has per utterance phrase which should be scored against, instead of whole utterance', 'option', None) = '',
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
-    no_freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
+    freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
         'option', '') = ''):
@@ -551,7 +551,7 @@ def main(
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
                  use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed,
                  keywords_list_f=keywords_list_f, not_score_end=not_score_end,
-                 no_freq_sort=no_freq_sort, phrase_f=phrase_f, isctm=isctm,
+                 freq_sort=freq_sort, phrase_f=phrase_f, isctm=isctm,
                  utt_group_map_f=utt_group_map_f)
 
 
