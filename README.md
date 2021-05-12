@@ -8,8 +8,9 @@ Supports scoring by group (for example by speaker) or just scoring keywords or p
 
 See here for [background motivation](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).
 
-Red is what the model got missed (deletion or the reference word in subtitution error). Read the white and red words to read the reference.\\
-Green is what the model did wrong (insertion or the hypothesis word in substitution error). Read the white and green words to read the hypothesis.\\
+Red is what the model got missed (deletion or the reference word in subtitution error). Read the white and red words to read the reference.
+
+Green is what the model did wrong (insertion or the hypothesis word in substitution error). Read the white and green words to read the hypothesis.
 
 ![Example](docs/images/texterrors_example.png)
 
