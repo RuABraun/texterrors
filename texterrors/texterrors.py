@@ -395,28 +395,27 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         if not skip_detailed:
             length = -1
             word_to_pos = {}
-            for entry in colored_output:
+            for i, entry in enumerate(colored_output):
                 if isinstance(entry, tuple):
                     len_word = entry[1]
                     w = entry[0]
-                    length += len_word
+                    length += len_word + 1
                     fh.write(f'{w} ')
                 else:
                     ref_w, hyp_w = entry.split('>')
                     larger_len = max(len(ref_w), len(hyp_w))
                     hyp_w = colored(hyp_w, 'green')
-                    length += larger_len
-                    word_to_pos[ref_w] = length
+                    length += larger_len + 1
+                    word_to_pos[(ref_w, i,)] = (length, larger_len,)
+                    length = 0
                     fh.write(f'{hyp_w:^{larger_len+9}} ')
-                length += 1
             fh.write('\n')
-            it = word_to_pos.items() if is_above_three_six else sorted(word_to_pos.items(), key=lambda x: x[1])
-            for word, length in it:
-                len_word = len(word)
-                pos = length - len_word
+            it = word_to_pos.items() if is_above_three_six else sorted(word_to_pos.items(), key=lambda x: x[0][1])
+            for (word, i,), (length, padded_len,) in it:
+                pos = length - padded_len - 1
                 word = colored(word, 'red')
                 fh.write(' ' * pos)
-                fh.write(f' {word:^{len_word+9}}')
+                fh.write(f'{word:^{padded_len+9}} ')
             fh.write('\n')
 
         if utt_group_map_f:
