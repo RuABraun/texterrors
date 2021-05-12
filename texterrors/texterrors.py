@@ -6,6 +6,8 @@ import numpy as np
 import plac
 from loguru import logger
 from termcolor import colored
+import shutil
+from dataclasses import dataclass
 
 
 def convert_to_int(lst_a, lst_b, dct):
@@ -246,11 +248,62 @@ def read_ctm_files(ref_f, hyp_f):
     utts = list(utt_to_ref.keys())
     return utt_to_ref, utt_to_hyp, utts
 
+@dataclass
+class LineElement:
+    upper_word: str
+    length: int
+    lower_word: str
+    length_lower: int
+    has_color: bool
+
+
+class DoubleLine:
+    def __init__(self, terminal_width):
+        self.line_elements = []
+        self.terminal_width = terminal_width
+
+    def add_lineelement(self, upper_word, length, lower_word, lower_length, has_color):
+        le = LineElement(upper_word, length, lower_word, lower_length, has_color)
+        self.line_elements.append(le)
+
+    @staticmethod
+    def construct(upper_line, lower_line):
+        upper_line_str = ' '.join(upper_line)
+        lower_line_str = ' '.join(lower_line)
+        return upper_line_str, lower_line_str
+
+    def iter_construct(self):
+        index = 0
+        upper_line = []
+        lower_line = []
+        written_len = 0
+        while index < len(self.line_elements):
+            le = self.line_elements[index]
+            length_lower = le.length_lower
+            padded_len = max(le.length, length_lower)
+            if written_len + padded_len > self.terminal_width:
+                upper_line_str, lower_line_str = self.construct(upper_line, lower_line)
+                upper_line, lower_line = [], []
+                yield upper_line_str, lower_line_str
+                written_len = 0
+            upper_word = le.upper_word
+            written_len += padded_len + 1
+            pad_len_plus_color = padded_len + 9 if le.has_color else 0
+            upper_line.append(f'{upper_word:^{pad_len_plus_color}}')
+            if length_lower != -1:
+                lower_line.append(f'{le.lower_word:^{pad_len_plus_color}}')
+            else:
+                lower_line.append(f'{le.lower_word:^{padded_len}}')
+            index += 1
+        upper_line, lower_line = self.construct(upper_line, lower_line)
+        yield upper_line, lower_line
+
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
                   not_score_end=False, no_freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
     is_above_three_six = sys.version_info[1] >= 7
+    terminal_width, _ = shutil.get_terminal_size()
     if not isctm:
         utt_to_text_ref, utt_to_text_hyp, utts = read_files(ref_f, hyp_f, isark)
     else:
@@ -368,55 +421,36 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         colored_output = []
         error_count = 0
         ref_word_count = 0
+        double_line = DoubleLine(terminal_width)
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
             if ref_w == hyp_w:
-                colored_output.append((ref_w, len(ref_w),))
+                double_line.add_lineelement(ref_w, len(ref_w), '', -1, False)
                 word_counts[ref_w] += 1
                 ref_word_count += 1
             else:
                 error_count += 1
                 if ref_w == '<eps>':
-                    colored_output.append((colored(hyp_w, 'green'), len(hyp_w),))
+                    double_line.add_lineelement(colored(hyp_w, 'green'), len(hyp_w), '', -1, True)
                     ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
-                    colored_output.append((colored(ref_w, 'red'), len(ref_w),))
+                    double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w), '', -1, True)
                     ref_word_count += 1
                     dels[ref_w] += 1
                     word_counts[ref_w] += 1
                 else:
                     ref_word_count += 1
                     key = f'{ref_w}>{hyp_w}'
-                    colored_output.append(key)
+                    double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w),
+                                                colored(hyp_w, 'green'), len(hyp_w), True)
                     subs[key] += 1
                     word_counts[ref_w] += 1
         total_count += ref_word_count
         if not skip_detailed:
-            length = -1
-            word_to_pos = {}
-            for i, entry in enumerate(colored_output):
-                if isinstance(entry, tuple):
-                    len_word = entry[1]
-                    w = entry[0]
-                    length += len_word + 1
-                    fh.write(f'{w} ')
-                else:
-                    ref_w, hyp_w = entry.split('>')
-                    larger_len = max(len(ref_w), len(hyp_w))
-                    hyp_w = colored(hyp_w, 'green')
-                    length += larger_len + 1
-                    word_to_pos[(ref_w, i,)] = (length, larger_len,)
-                    length = 0
-                    fh.write(f'{hyp_w:^{larger_len+9}} ')
-            fh.write('\n')
-            it = word_to_pos.items() if is_above_three_six else sorted(word_to_pos.items(), key=lambda x: x[0][1])
-            for (word, i,), (length, padded_len,) in it:
-                pos = length - padded_len - 1
-                word = colored(word, 'red')
-                fh.write(' ' * pos)
-                fh.write(f'{word:^{padded_len+9}} ')
-            fh.write('\n')
+            for upper_line, lower_line in double_line.iter_construct():
+                fh.write(upper_line + '\n')
+                fh.write(lower_line + '\n')
 
         if utt_group_map_f:
             group = utt_group_map[utt]
