@@ -356,6 +356,8 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         fh.write('Per utt details:\n')
     dct_char = {insert_tok: 0, 0: insert_tok}
     for utt in utts:
+        if debug:
+            print(utt)
         ref = utt_to_text_ref[utt]
         if utt2phrase:
             phrase = utt2phrase.get(utt)
@@ -368,12 +370,15 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
                 continue
         if keywords:
             ref = [w for w in ref if w in keywords]
-            if not len(ref):  # skip utterance is contains no keywords
-                continue
+        if not len(ref):  # skip utterance if empty reference
+            continue
         hyp = utt_to_text_hyp.get(utt)
         if hyp is None:
             logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
+        if debug:
+            print(ref)
+            print(hyp)
 
         if not isctm:
             ref_aligned, hyp_aligned, _ = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
