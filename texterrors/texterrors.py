@@ -89,7 +89,7 @@ def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
     return aligned_a, aligned_b, cost
 
 
-def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, debug, insert_tok):
+def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, durs_a, durs_b, debug, insert_tok):
     len_a = len(text_a_str)
     len_b = len(text_b_str)
     # doing dynamic time warp
@@ -97,15 +97,15 @@ def _align_texts_ctm(text_a_str, text_b_str, times_a, times_b, use_chardiff, deb
     text_b_str = [insert_tok] + text_b_str
     # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
-    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, times_a, times_b,
-        use_chardiff)
+    cost = texterrors_align.calc_sum_cost_ctm(summed_cost, text_a_str, text_b_str, 
+        times_a, times_b, durs_a, durs_b)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
     best_path_lst = []
-    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, text_a_str, text_b_str, times_a,
-        times_b, use_chardiff)
+    texterrors_align.get_best_path_ctm(summed_cost, best_path_lst, 
+        text_a_str, text_b_str, times_a, times_b, durs_a, durs_b)
     assert len(best_path_lst) % 2 == 0
     path = []
     for n in range(0, len(best_path_lst), 2):
@@ -387,8 +387,10 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             hyp_words = [e[0] for e in hyp]
             ref_times = [e[1] for e in ref]
             hyp_times = [e[1] for e in hyp]
+            ref_durs = [e[2] for e in ref]
+            hyp_durs = [e[2] for e in hyp]
             ref_aligned, hyp_aligned, _ = _align_texts_ctm(ref_words, hyp_words, ref_times,
-                hyp_times, use_chardiff, debug, insert_tok)
+                hyp_times, ref_durs, hyp_durs, debug, insert_tok)
 
         if not skip_detailed:
             fh.write(f'{utt}\n')

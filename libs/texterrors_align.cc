@@ -188,7 +188,8 @@ void get_best_path(py::array_t<double> array, py::list& bestpath_lst, std::vecto
 }
 
 void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::vector<std::string> texta,
-                   std::vector<std::string> textb, std::vector<double> times_a, std::vector<double> times_b, bool use_chardiff) {
+                   std::vector<std::string> textb, std::vector<double> times_a, std::vector<double> times_b,
+                   std::vector<double> durs_a, std::vector<double> durs_b) {
   auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
   int32_t numr = array.shape()[0], numc = array.shape()[1];
@@ -210,19 +211,33 @@ void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::v
       upc = cost_mat[(i-1) * numc + j];
       leftc = cost_mat[i * numc + j - 1];
       diagc = cost_mat[(i-1) * numc + j - 1];
-      std::string& a = texta[i];
-      std::string& b = textb[j];
 
-      double time_diff = (i == 0 || j == 0) ? 0. : pow(times_a[i-1] - times_b[j-1], 2.);
-      double up_trans_cost = 1.0 + time_diff;
-      double left_trans_cost = 1.0 + time_diff;
-      double diag_trans_cost;
-      if (use_chardiff) {
-        diag_trans_cost =
-          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5 + time_diff;
+      double time_cost;
+      if (i == 0 || j == 0) {
+        time_cost = 0.;
       } else {
-        diag_trans_cost = a == b ? 0. + time_diff : 1. + time_diff;
+        double start_a = times_a[i - 1];
+        double start_b = times_b[j - 1];
+        double end_a = start_a + durs_a[i - 1];
+        double end_b = start_b + durs_b[j - 1];
+        double overlap;
+        if (start_a > end_b) {
+          overlap = end_b - start_a;
+        } else if (start_b > end_a) {
+          overlap = end_a - start_b;
+        } else if (start_a > start_b) {
+          double min_end = std::min(end_a, end_b); 
+          overlap = min_end - start_a;
+        } else {
+          double min_end = std::min(end_a, end_b); 
+          overlap = min_end - start_b;
+        }
+        time_cost = -overlap;
       }
+      
+      double up_trans_cost = 1. + time_cost;
+      double left_trans_cost = 1. + time_cost;
+      double diag_trans_cost = texta[i] == textb[j] ? 0. + time_cost : 1. + time_cost;
 
       if (isclose(upc + up_trans_cost, current_cost)) {
         idx = 0;
@@ -231,7 +246,7 @@ void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::v
       } else if (isclose(diagc + diag_trans_cost, current_cost)) {
         idx = 2;
       } else {
-        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<" times " << times_a[i] << " "<<times_b[j]<<std::endl;
+        std::cout << texta[i] <<" "<<textb[j]<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<" times " << times_a[i] << " "<<times_b[j]<<std::endl;
         std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;
         std::cout << diag_trans_cost + diagc <<" "<<current_cost <<std::endl;
         throw std::runtime_error("Should not be possible !");
@@ -309,7 +324,8 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
 
 
 int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta,
-                         std::vector<std::string>& textb, std::vector<double> times_a, std::vector<double> times_b, bool use_chardist) {
+                      std::vector<std::string>& textb, std::vector<double> times_a, std::vector<double> times_b,
+                      std::vector<double> durs_a, std::vector<double> durs_b) {
   if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
 
@@ -321,19 +337,32 @@ int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta
   for(int32 i = 0; i < M; i++) {
     for(int32 j = 0; j < N; j++) {
       double transition_cost, a_cost, b_cost;
-      double time_diff = (i == 0 || j == 0) ? 0. : pow(times_a[i-1] - times_b[j-1], 2.);
-      if (use_chardist) {
-        std::string& a = texta[i];
-        std::string& b = textb[j];
-        transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5 + time_diff;
-//        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
-        a_cost = 1. + time_diff;
-        b_cost = 1. + time_diff;
+      double time_cost;
+      if (i == 0 || j == 0) {
+        time_cost = 0.;
       } else {
-        a_cost = 1. + time_diff;
-        b_cost = 1. + time_diff;
-        transition_cost = texta[i] == textb[j] ? 0. + time_diff : 1. + time_diff;
+        double start_a = times_a[i - 1];
+        double start_b = times_b[j - 1];
+        double end_a = start_a + durs_a[i - 1];
+        double end_b = start_b + durs_b[j - 1];
+        double overlap;
+        if (start_a > end_b) {
+          overlap = end_b - start_a;
+        } else if (start_b > end_a) {
+          overlap = end_a - start_b;
+        } else if (start_a > start_b) {
+          double min_end = std::min(end_a, end_b); 
+          overlap = min_end - start_a;
+        } else {
+          double min_end = std::min(end_a, end_b); 
+          overlap = min_end - start_b;
+        }
+        time_cost = -overlap;
       }
+      
+      a_cost = 1. + time_cost;
+      b_cost = 1. + time_cost;
+      transition_cost = texta[i] == textb[j] ? 0. + time_cost : 1. + time_cost;
 
       if (i == 0 && j == 0) {
         ptr[0] = 0;
