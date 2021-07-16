@@ -14,6 +14,8 @@ Green is what the model output incorrectly (insertion or the hypothesis word in 
 
 ![Example](docs/images/texterrors_example.png)
 
+Latest update (16.07.) improves alignment based on ctms (much stricter now).
+
 # Installing
 Requires minimum python 3.6! And the `pybind11` package should already be installed.
 ```
