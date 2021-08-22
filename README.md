@@ -14,7 +14,10 @@ Green is what the model output incorrectly (insertion or the hypothesis word in 
 
 ![Example](docs/images/texterrors_example.png)
 
-Latest update (16.07.) improves alignment based on ctms (much stricter now).
+Recent changes:
+
+- 22.08. added oracle wer feature, cost matrix creation returns cost now
+- 16.07. improves alignment based on ctms (much stricter now).
 
 # Installing
 Requires minimum python 3.6! And the `pybind11` package should already be installed.

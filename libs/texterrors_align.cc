@@ -281,7 +281,6 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
   if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
   double* ptr = (double*) buf.ptr;
-//  std::cout << "STARTING"<<std::endl;
   for(int32 i = 0; i < M; i++) {
     for(int32 j = 0; j < N; j++) {
       double transition_cost, a_cost, b_cost;
@@ -289,7 +288,6 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
         std::string& a = texta[i];
         std::string& b = textb[j];
         transition_cost = levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
-//        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" "<<transition_cost<<std::endl;
         a_cost = 1.0;
         b_cost = 1.0;
       } else {
@@ -318,8 +316,7 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
       ptr[i * N + j] = sum;
     }
   }
-//  std::cout << "DONE"<<std::endl;
-  return ptr[0];  // TODO: FIX
+  return ptr[(M-1) * N + N - 1];
 }
 
 
@@ -384,8 +381,7 @@ int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta
       ptr[i * N + j] = sum;
     }
   }
-//  std::cout << "DONE"<<std::endl;
-  return ptr[0];  // TODO: FIX
+  return ptr[(M-1) * N + N - 1];
 }
 
 PYBIND11_MODULE(texterrors_align,m) {

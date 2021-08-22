@@ -67,6 +67,7 @@ def test_wer():
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 50.0, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
 
+
 def test_oov_cer():
     oov_set = {'airport'}
     ref_aligned = 'the missing word is <eps> airport okay'.split()

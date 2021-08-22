@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import sys
 from collections import defaultdict
+from itertools import chain
+
 import texterrors_align
 import numpy as np
 import plac
@@ -204,7 +206,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
     return oov_count_error, oov_count_denom
 
 
-def read_files(ref_f, hyp_f, isark):
+def read_files(ref_f, hyp_f, isark, oracle_wer):
     utt_to_text_ref = {}
     utts = []
     with open(ref_f) as fh:
@@ -219,12 +221,15 @@ def read_files(ref_f, hyp_f, isark):
                 utt_to_text_ref[i] = words
                 utts.append(i)
 
-    utt_to_text_hyp = {}
+    utt_to_text_hyp = {} if not oracle_wer else defaultdict(list)
     with open(hyp_f) as fh:
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
-                utt_to_text_hyp[utt] = [w for w in words if w != '<unk>']
+                if not oracle_wer:
+                    utt_to_text_hyp[utt] = [w for w in words if w != '<unk>']
+                else:
+                    utt_to_text_hyp[utt].append([w for w in words if w != '<unk>'])
             else:
                 words = line.split()
                 utt_to_text_hyp[i] = [w for w in words if w != '<unk>']
@@ -301,11 +306,14 @@ class DoubleLine:
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False, freq_sort=False, phrase_f='', isctm=False, utt_group_map_f=''):
+                  not_score_end=False, freq_sort=False, phrase_f='', isctm=False, oracle_wer=False, utt_group_map_f=''):
+    if oracle_wer:
+        assert isark and not isctm
+        assert not use_chardiff, 'Run again with `-no-chardiff` !'
     is_above_three_six = sys.version_info[1] >= 7
     terminal_width, _ = shutil.get_terminal_size()
     if not isctm:
-        utt_to_text_ref, utt_to_text_hyp, utts = read_files(ref_f, hyp_f, isark)
+        utt_to_text_ref, utt_to_text_hyp, utts = read_files(ref_f, hyp_f, isark, oracle_wer)
     else:
         utt_to_text_ref, utt_to_text_hyp, utts = read_ctm_files(ref_f, hyp_f)
 
@@ -350,6 +358,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     ins = defaultdict(int)
     dels = defaultdict(int)
     subs = defaultdict(int)
+    total_cost = 0
     total_count = 0
     word_counts = defaultdict(int)
     if not skip_detailed:
@@ -372,6 +381,17 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             ref = [w for w in ref if w in keywords]
         if not len(ref):  # skip utterance if empty reference
             continue
+
+        if oracle_wer:
+            hyps = utt_to_text_hyp[utt]
+            costs = []
+            for hyp in hyps:
+                _, _, cost = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
+                costs.append(cost)
+            total_cost += min(costs)
+            total_count += len(ref)
+            continue
+
         hyp = utt_to_text_hyp.get(utt)
         if hyp is None:
             logger.warning(f'Missing hypothesis for utterance: {utt}')
@@ -381,7 +401,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             print(hyp)
 
         if not isctm:
-            ref_aligned, hyp_aligned, _ = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
+            ref_aligned, hyp_aligned, cost = align_texts(ref, hyp, debug, use_chardiff=use_chardiff)
         else:
             ref_words = [e[0] for e in ref]
             hyp_words = [e[0] for e in hyp]
@@ -389,8 +409,9 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             hyp_times = [e[1] for e in hyp]
             ref_durs = [e[2] for e in ref]
             hyp_durs = [e[2] for e in hyp]
-            ref_aligned, hyp_aligned, _ = align_texts_ctm(ref_words, hyp_words, ref_times,
+            ref_aligned, hyp_aligned, cost = align_texts_ctm(ref_words, hyp_words, ref_times,
                 hyp_times, ref_durs, hyp_durs, debug, insert_tok)
+        total_cost += cost
 
         if not skip_detailed:
             fh.write(f'{utt}\n')
@@ -489,6 +510,13 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             oov_count_error += err
             oov_count_denom += cnt
 
+    if not use_chardiff:
+        s = sum(v for v in chain(ins.values(), dels.values(), subs.values()))
+        assert s == total_cost, f'{s} {total_cost}'
+    if oracle_wer:
+        fh.write(f'Oracle WER: {total_cost / total_count}\n')
+        return
+
     # Outputting metrics from gathered statistics.
     ins_count = sum(ins.values())
     del_count = sum(dels.values())
@@ -546,6 +574,7 @@ def main(
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
     freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
+    oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
         'option', '') = ''):
 
@@ -558,7 +587,7 @@ def main(
     process_files(fpath_ref, fpath_hyp, outf, cer, debug=debug, oov_set=oov_set,
                  use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed,
                  keywords_list_f=keywords_list_f, not_score_end=not_score_end,
-                 freq_sort=freq_sort, phrase_f=phrase_f, isctm=isctm,
+                 freq_sort=freq_sort, phrase_f=phrase_f, isctm=isctm, oracle_wer=oracle_wer,
                  utt_group_map_f=utt_group_map_f)
 
 
