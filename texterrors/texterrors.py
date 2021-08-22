@@ -510,7 +510,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             oov_count_error += err
             oov_count_denom += cnt
 
-    if not use_chardiff:
+    if not use_chardiff and not oracle_wer:
         s = sum(v for v in chain(ins.values(), dels.values(), subs.values()))
         assert s == total_cost, f'{s} {total_cost}'
     if oracle_wer:
@@ -572,7 +572,7 @@ def main(
     skip_detailed: ('No per utterance output', 'flag', 's') = False,
     phrase_f: ('Has per utterance phrase which should be scored against, instead of whole utterance', 'option', None) = '',
     keywords_list_f: ('Will filter out non keyword reference words.', 'option', None) = '',
-    freq_sort: ('Turn off sorting del/sub errors by frequency (instead by count)', 'flag', None) = False,
+    freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
     oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
