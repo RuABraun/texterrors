@@ -306,7 +306,7 @@ class DoubleLine:
 
 def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=False,
                   use_chardiff=True, isark=False, skip_detailed=False, insert_tok='<eps>', keywords_list_f='',
-                  not_score_end=False, freq_sort=False, phrase_f='', isctm=False, oracle_wer=False, utt_group_map_f=''):
+                  not_score_end=False, freq_sort=False, phrase_f='', isctm=False, oracle_wer=False, utt_group_map_f='', nocolor=False):
     if oracle_wer:
         assert isark and not isctm
         assert not use_chardiff, 'Run again with `-no-chardiff` !'
@@ -460,18 +460,28 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             else:
                 error_count += 1
                 if ref_w == '<eps>':
-                    double_line.add_lineelement(colored(hyp_w, 'green'), len(hyp_w), '', -1, True)
+                    if not nocolor:
+                        double_line.add_lineelement(colored(hyp_w, 'green'), len(hyp_w), '', -1, True)
+                    else:
+                        double_line.add_lineelement('*', 1, f'{hyp_w.upper()}', len(hyp_w), False)
                     ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
-                    double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w), '', -1, True)
+                    if not nocolor:
+                        double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w), '', -1, True)
+                    else:
+                        double_line.add_lineelement(f'{ref_w.upper()}', len(hyp_w), '', -1, False)
                     ref_word_count += 1
                     dels[ref_w] += 1
                     word_counts[ref_w] += 1
                 else:
                     ref_word_count += 1
                     key = f'{ref_w}>{hyp_w}'
-                    double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w),
-                                                colored(hyp_w, 'green'), len(hyp_w), True)
+                    if not nocolor:
+                        double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w),
+                                                    colored(hyp_w, 'green'), len(hyp_w), True)
+                    else:
+                        double_line.add_lineelement(ref_w.upper(), len(ref_w),
+                                                    hyp_w.upper(), len(hyp_w), False)
                     subs[key] += 1
                     word_counts[ref_w] += 1
         total_count += ref_word_count
@@ -479,6 +489,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
             for upper_line, lower_line in double_line.iter_construct():
                 fh.write(upper_line + '\n')
                 fh.write(lower_line + '\n')
+
 
         if utt_group_map_f:
             group = utt_group_map[utt]
@@ -577,6 +588,7 @@ def main(
     oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
         'option', '') = ''):
+    nocolor: ('', 'flag', None)=False):
 
     oov_set = []
     if oov_list_f:
@@ -588,7 +600,7 @@ def main(
                  use_chardiff=not no_chardiff, isark=isark, skip_detailed=skip_detailed,
                  keywords_list_f=keywords_list_f, not_score_end=not_score_end,
                  freq_sort=freq_sort, phrase_f=phrase_f, isctm=isctm, oracle_wer=oracle_wer,
-                 utt_group_map_f=utt_group_map_f)
+                 utt_group_map_f=utt_group_map_f, nocolor=nocolor)
 
 
 if __name__ == "__main__":
