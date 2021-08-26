@@ -562,7 +562,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         fh.write('\n')
         fh.write(f'Substitutions:\n')
         for v, c in sorted(subs.items(),
-                           key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0].split('>')[0].strip()]),
+                           key=lambda x: (x[1] if not freq_sort else (x[1] / word_counts[x[0].split('>')[0].strip()], x[1],)),
                            reverse=True)[:count]:
             ref_w = v.split('>')[0].strip()
             fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
@@ -586,8 +586,7 @@ def main(
     freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count)', 'flag', None) = False,
     not_score_end: ('Errors at the end will not be counted', 'flag', None) = False,
     oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
-    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group',
-        'option', '') = ''):
+    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group', 'option', '') = '',
     nocolor: ('', 'flag', None)=False):
 
     oov_set = []
