@@ -34,6 +34,18 @@ def lev_distance(a, b):
         return texterrors_align.lev_distance(a, b)
 
 
+def seq_distance(a, b):
+    len_a = len(a)
+    len_b = len(b)
+    # doing dynamic time warp
+    a = ['<>'] + a
+    b = ['<>'] + b
+    # +1 because of padded start token
+    summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
+    cost = texterrors_align.calc_sum_cost(summed_cost, a, b, False)
+    return cost
+
+
 def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
     len_a = len(text_a_str)
     len_b = len(text_b_str)
