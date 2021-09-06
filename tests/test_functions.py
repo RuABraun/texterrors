@@ -1,3 +1,4 @@
+""" ! Reminder: texterrors needs to be installed """
 import Levenshtein as levd
 import texterrors
 
@@ -7,9 +8,7 @@ def test_levd():
     for a, b in zip(pairs[:-1:2], pairs[1::2]):
         d1 = texterrors.lev_distance(a, b)
         d2 = levd.distance(a, b)
-        if d1 != d2:
-            print(a, b, d1, d2)
-            raise RuntimeError('Assert failed!')
+        assert d1 == d2, f'{a} {b} {d1} {d2}'
 
 
 def calc_wer(ref, b):
@@ -80,6 +79,35 @@ def test_oov_cer():
     err, cnt = texterrors.get_oov_cer(ref_aligned, hyp_aligned, oov_set)
     assert err / cnt == 0., err / cnt
 
+
+def test_seq_distance():
+    a, b = 'a b', 'a b'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 0
+
+    a, b = 'a b', 'a c'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 1
+
+    a, b = 'a b c', 'a b d'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 1
+
+    a, b = 'a b c', 'a b d e'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 2
+
+    a, b = 'a b c', 'd e f g'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 4
+
+    a, b = 'ça va très bien', 'ça ne va pas'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 3
+
+    a, b = 'ça ne va pas', 'merci ça va'
+    d = texterrors.seq_distance(a.split(), b.split())
+    assert d == 3
 
 print('Reminder: texterrors needs to be installed')
 test_levd()
