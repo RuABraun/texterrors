@@ -363,6 +363,9 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
     # Done reading input, processing.
     oov_count_denom = 0
     oov_count_error = 0
+    oov_word_count = 0
+    oov_word_error = 0
+
     char_count = 0
     char_error_count = 0
     utt_wrong = 0
@@ -465,12 +468,16 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):  # Counting errors
             if not_score_end and i > last_good_index:
                 break
+            if ref_w in oov_set:
+                oov_word_count += 1
             if ref_w == hyp_w:
                 double_line.add_lineelement(ref_w, len(ref_w), '', -1, False)
                 word_counts[ref_w] += 1
                 ref_word_count += 1
             else:
                 error_count += 1
+                if ref_w in oov_set:
+                    oov_word_error += 1
                 if ref_w == '<eps>':
                     if not nocolor:
                         double_line.add_lineelement(colored(hyp_w, 'green'), len(hyp_w), '', -1, True)
@@ -555,6 +562,7 @@ def process_files(ref_f, hyp_f, outf, cer=False, count=10, oov_set=None, debug=F
         fh.write(f'CER: {100.*cer:.1f} ({char_error_count} / {char_count})\n')
     if oov_set:
         fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.1f}\n')
+        fh.write(f'OOV WER: {100.*oov_word_error / oov_word_count:.1f}\n')
     if utt_group_map_f:
         fh.write('Group WERS:\n')
         for group, stats in group_stats.items():
