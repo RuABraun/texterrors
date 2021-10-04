@@ -1,6 +1,9 @@
 """ ! Reminder: texterrors needs to be installed """
+import io
+
 import Levenshtein as levd
 import texterrors
+from dataclasses import dataclass
 
 
 def test_levd():
@@ -108,6 +111,54 @@ def test_seq_distance():
     a, b = 'ça ne va pas', 'merci ça va'
     d = texterrors.seq_distance(a.split(), b.split())
     assert d == 3
+
+
+@dataclass
+class Utt:
+    uid: str
+    words: list
+    times: list = None
+    durs: list = None
+
+
+def test_process_lines():
+    reflines = ['1 zum beispiel work shops wo wir anbieten']
+    hyplines = ['1 zum beispiel work shop sommer anbieten']
+    refs = {}
+    for line in reflines:
+        i, line = line.split(maxsplit=1)
+        i = str(i)
+        refs[i] = Utt(i, line.split())
+    hyps = {}
+    for line in hyplines:
+        i, line = line.split(maxsplit=1)
+        i = str(i)
+        hyps[i] = Utt(i, line.split())
+
+    buffer = io.StringIO()
+    texterrors.process_lines(refs, hyps, buffer, nocolor=True)
+    output = buffer.getvalue()
+
+    ref = """Per utt details:
+1
+zum beispiel work SHOPS   WO   WIR anbieten
+                  SHOP  SOMMER             
+
+WER: 42.9 (ins 0, del 1, sub 2 / 7)
+SER: 100.0
+
+Insertions:
+
+Deletions:
+wir\t1\t1
+
+Substitutions:
+shops>shop\t1\t1
+wo>sommer\t1\t1
+"""
+
+    assert output == ref
+
 
 print('Reminder: texterrors needs to be installed')
 test_levd()
