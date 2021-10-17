@@ -2,16 +2,17 @@
 import sys
 from collections import defaultdict
 from itertools import chain
-
+from typing import List, Tuple, Dict
 import texterrors_align
 import numpy as np
 import plac
 from loguru import logger
 from termcolor import colored
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 OOV_SYM = '<unk>'
+
 
 def convert_to_int(lst_a, lst_b, dct):
     def convert(lst, dct_syms):
@@ -228,7 +229,7 @@ class Utt:
     durs: list = None
 
 
-def read_asr_files(ref_f, hyp_f, isark, oracle_wer):
+def read_ref_file(ref_f, isark):
     ref_utts = {}
     with open(ref_f) as fh:
         for i, line in enumerate(fh):
@@ -240,7 +241,10 @@ def read_asr_files(ref_f, hyp_f, isark, oracle_wer):
                 words = line.split()
                 i = str(i)
                 ref_utts[i] = Utt(i, words)
+    return ref_utts
 
+
+def read_hyp_file(hyp_f, isark, oracle_wer):
     hyp_utts = {} if not oracle_wer else defaultdict(list)
     with open(hyp_f) as fh:
         for i, line in enumerate(fh):
@@ -255,88 +259,110 @@ def read_asr_files(ref_f, hyp_f, isark, oracle_wer):
                 words = line.split()
                 i = str(i)
                 hyp_utts[i] = Utt(i, [w for w in words if w != OOV_SYM])
-    return ref_utts, hyp_utts
+    return hyp_utts
 
 
-def read_ctm_files(ref_f, hyp_f):
+def read_ctm_file(f):
     """ Assumes first field is utt and last three fields are word, time, duration """
-    def read_ctm_file(f):
-        utt_to_wordtimes = defaultdict(list)
-        with open(f) as fh:
-            for line in fh:
-                utt, *_, time, dur, word = line.split()
-                time = float(time)
-                dur = float(dur)
-                utt_to_wordtimes[utt].append((word, time, dur,))
-        utts = {}
-        for utt, wordtimes in utt_to_wordtimes.items():
-            words = []
-            times = []
-            durs = []
-            for e in wordtimes:
-                words.append(e[0]), times.append(e[1]), durs.append([2])
-            utts[utt] = Utt(utt, words, times, durs)
-        return utt_to_wordtimes
-    ref_utts = read_ctm_file(ref_f)
-    hyp_utts = read_ctm_file(hyp_f)
-    return ref_utts, hyp_utts
+    utt_to_wordtimes = defaultdict(list)
+    with open(f) as fh:
+        for line in fh:
+            utt, *_, time, dur, word = line.split()
+            time = float(time)
+            dur = float(dur)
+            utt_to_wordtimes[utt].append((word, time, dur,))
+    utts = {}
+    for utt, wordtimes in utt_to_wordtimes.items():
+        words = []
+        times = []
+        durs = []
+        for e in wordtimes:
+            words.append(e[0]), times.append(e[1]), durs.append([2])
+        utts[utt] = Utt(utt, words, times, durs)
+    return utt_to_wordtimes
+
 
 @dataclass
 class LineElement:
-    upper_word: str
-    length: int
-    lower_word: str
-    length_lower: int
+    words: Tuple[str]
+    lengths: Tuple[int]
     has_color: bool
 
 
-class DoubleLine:
-    def __init__(self, terminal_width):
+class MultiLine:
+    def __init__(self, terminal_width, num_lines):
         self.line_elements = []
         self.terminal_width = terminal_width
+        self.num_lines = num_lines
 
-    def add_lineelement(self, upper_word, length, lower_word, lower_length, has_color):
-        le = LineElement(upper_word, length, lower_word, lower_length, has_color)
+    def add_lineelement(self, words, lengths, has_color):
+        le = LineElement(words, lengths, has_color)
         self.line_elements.append(le)
 
     @staticmethod
-    def construct(upper_line, lower_line):
-        upper_line_str = ' '.join(upper_line)
-        lower_line_str = ' '.join(lower_line)
-        return upper_line_str, lower_line_str
+    def construct(*lines):
+        joined_lines = []
+        for line in lines:
+            joined_lines.append(' '.join(line))
+        return joined_lines
 
     def iter_construct(self):
         index = 0
-        upper_line = []
-        lower_line = []
+        lines = [[] for _ in range(self.num_lines)]
         written_len = 0
         while index < len(self.line_elements):
             le = self.line_elements[index]
-            length_lower = le.length_lower
-            padded_len = max(le.length, length_lower)
+            lengths = le.lengths
+            padded_len = max(*lengths)
             if written_len + padded_len > self.terminal_width:
-                upper_line_str, lower_line_str = self.construct(upper_line, lower_line)
-                upper_line, lower_line = [], []
-                yield upper_line_str, lower_line_str
+                joined_lines = self.construct(*lines)
+                lines = [[] for _ in range(self.num_lines)]
+                yield joined_lines
                 written_len = 0
-            upper_word = le.upper_word
             written_len += padded_len + 1  # +1 because space will be added
             pad_len_plus_color = padded_len + 9 if le.has_color else padded_len
-            upper_line.append(f'{upper_word:^{pad_len_plus_color}}')
-            if length_lower != -1:
-                lower_line.append(f'{le.lower_word:^{pad_len_plus_color}}')
-            else:
-                lower_line.append(f'{le.lower_word:^{padded_len}}')
+            words = le.words
+            for i, line in enumerate(lines):
+                if i == 0:
+                    line.append(f'{words[0]:^{pad_len_plus_color}}')
+                else:
+                    if lengths[i] != -1:
+                        line.append(f'{words[i]:^{pad_len_plus_color}}')
+                    else:
+                        line.append(f'{words[i]:^{padded_len}}')
             index += 1
-        upper_line, lower_line = self.construct(upper_line, lower_line)
-        yield upper_line, lower_line
+        joined_lines = self.construct(*lines)
+        yield joined_lines
+
+
+@dataclass
+class ErrorStats:
+    total_cost: int = 0
+    total_count: int = 0
+    utts: List[str] = field(default_factory=list)
+    utt_wrong: int = 0
+    ins: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    dels: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    subs: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    char_error_count: int = 0
+    char_count: int = 0
+    oov_count_error: int = 0
+    oov_count_denom: int = 0
+    oov_word_error: int = 0
+    oov_word_count: int = 0
+    keywords_predicted: int = 0
+    keywords_output: int = 0
+    keywords_count: int = 0
+    word_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
 
 def read_files(ref_f, hyp_f, isark, isctm, keywords_f, utt_group_map_f, oracle_wer):
     if not isctm:
-        ref_utts, hyp_utts = read_asr_files(ref_f, hyp_f, isark, oracle_wer)
+        ref_utts = read_ref_file(ref_f, isark)
+        hyp_utts = read_hyp_file(hyp_f, isark, oracle_wer)
     else:
-        ref_utts, hyp_utts = read_ctm_files(ref_f, hyp_f)
+        ref_utts = read_ctm_file(ref_f)
+        hyp_utts = read_ctm_file(hyp_f)
 
     keywords = set()
     if keywords_f:
@@ -354,7 +380,238 @@ def read_files(ref_f, hyp_f, isark, isctm, keywords_f, utt_group_map_f, oracle_w
     return ref_utts, hyp_utts, keywords, utt_group_map
 
 
-def process_lines(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set=None, debug=False,
+def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_counts):
+    fh.write(f'\nInsertions:\n')
+    for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:num_top_errors]:
+        fh.write(f'{v}\t{c}\n')
+    fh.write('\n')
+    fh.write(f'Deletions:\n')
+    for v, c in sorted(dels.items(), key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0]]),
+                       reverse=True)[:num_top_errors]:
+        fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
+    fh.write('\n')
+    fh.write(f'Substitutions:\n')
+    for v, c in sorted(subs.items(),
+                       key=lambda x: (x[1] if not freq_sort else (x[1] / word_counts[x[0].split('>')[0].strip()], x[1],)),
+                       reverse=True)[:num_top_errors]:
+        ref_w = v.split('>')[0].strip()
+        fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
+
+
+def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
+                  terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
+                  group_stats, nocolor, insert_tok):
+    error_stats = ErrorStats()
+    dct_char = {insert_tok: 0, 0: insert_tok}
+    error_stats.utts = ref_utts.keys()
+    logger.info(error_stats.ins)
+    multilines = []
+    for utt in error_stats.utts:
+        if debug:
+            print(utt)
+        ref = ref_utts[utt]
+
+        if not len(ref.words):  # skip utterance if empty reference
+            logger.warning(f'Skipping empty utterance {utt}')
+            continue
+
+        if oracle_wer:
+            hyps = hyp_utts[utt]
+            costs = []
+            for hyp in hyps:
+                _, _, cost = align_texts(ref.words, hyp.words, debug, use_chardiff=use_chardiff)
+                costs.append(cost)
+            error_stats.total_cost += min(costs)
+            error_stats.total_count += len(ref)
+            continue
+
+        hyp = hyp_utts.get(utt)
+        if hyp is None:
+            logger.warning(f'Missing hypothesis for utterance: {utt}')
+            continue
+        if debug:
+            print(ref.words)
+            print(hyp.words)
+
+        if not isctm:
+            ref_aligned, hyp_aligned, cost = align_texts(ref.words, hyp.words, debug, use_chardiff=use_chardiff)
+        else:
+            ref_aligned, hyp_aligned, cost = align_texts_ctm(ref.words, hyp.words, ref.times,
+                                                             hyp.times, ref.durs, hyp.durs, debug, insert_tok)
+        error_stats.total_cost += cost
+
+        # Counting errors
+        error_count = 0
+        ref_word_count = 0
+
+        double_line = MultiLine(terminal_width, 2)
+        for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):
+            if ref_w in keywords:
+                error_stats.keywords_count += 1
+            if hyp_w in keywords:
+                error_stats.keywords_output += 1
+            if ref_w in oov_set:
+                error_stats.oov_word_count += 1
+
+            if ref_w == hyp_w:
+                if hyp_w in keywords:
+                    error_stats.keywords_predicted += 1
+                double_line.add_lineelement((ref_w, '',),
+                                            (len(ref_w), -1),
+                                            False)
+                error_stats.word_counts[ref_w] += 1
+                ref_word_count += 1
+            else:
+                error_count += 1
+                if ref_w in oov_set:
+                    error_stats.oov_word_error += 1
+                if ref_w == '<eps>':
+                    if not nocolor:
+                        double_line.add_lineelement((colored(hyp_w, 'green'), '',),
+                                                    (len(hyp_w), -1,),
+                                                    True)
+                    else:
+                        hyp_w_upper = hyp_w.upper()
+                        double_line.add_lineelement(('*', hyp_w_upper,),
+                                                    (1, len(hyp_w_upper)),
+                                                    False)
+                    error_stats.ins[hyp_w] += 1
+                elif hyp_w == '<eps>':
+                    if not nocolor:
+                        double_line.add_lineelement((colored(ref_w, 'red'), '',),
+                                                    (len(ref_w), -1,),
+                                                    True)
+                    else:
+                        ref_w_upper = ref_w.upper()
+                        double_line.add_lineelement((ref_w_upper, '',),
+                                                    (len(ref_w_upper), -1,),
+                                                    False)
+                    ref_word_count += 1
+                    error_stats.dels[ref_w] += 1
+                    error_stats.word_counts[ref_w] += 1
+                else:
+                    ref_word_count += 1
+                    key = f'{ref_w}>{hyp_w}'
+                    if not nocolor:
+                        double_line.add_lineelement((colored(ref_w, 'red'), colored(hyp_w, 'green'),),
+                                                    (len(ref_w), len(hyp_w),),
+                                                    True)
+                    else:
+                        ref_w_upper = ref_w.upper()
+                        hyp_w_upper = hyp_w.upper()
+                        double_line.add_lineelement((ref_w_upper, hyp_w_upper,),
+                                                    (len(ref_w_upper), len(hyp_w_upper),),
+                                                    False)
+                    error_stats.subs[key] += 1
+                    error_stats.word_counts[ref_w] += 1
+        error_stats.total_count += ref_word_count
+
+        if not skip_detailed:
+            multilines.append(double_line)
+
+        if utt_group_map:
+            group = utt_group_map[utt]
+            group_stats[group]['count'] += ref_word_count
+            group_stats[group]['errors'] += error_count
+
+        if error_count:
+            error_stats.utt_wrong += 1
+
+        if cer:  # Calculate CER
+            def convert_to_char_list(lst):
+                new = []
+                for i, word in enumerate(lst):
+                    for c in word:
+                        new.append(c)
+                    if i != len(lst) - 1:
+                        new.append(' ')
+                return new
+
+            char_ref = convert_to_char_list(ref.words)
+            char_hyp = convert_to_char_list(hyp.words)
+
+            ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
+            error_stats.char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
+            error_stats.char_count += len(ref_int)
+
+        if oov_set:  # Get OOV CER
+            err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
+            error_stats.oov_count_error += err
+            error_stats.oov_count_denom += cnt
+    if not skip_detailed:
+        assert len(multilines) == len(error_stats.utts)
+    s = sum(error_stats.subs.values()) + sum(error_stats.ins.values()) + sum(error_stats.dels.values())
+    logger.info(f'sum errors {s}')
+    return multilines, error_stats
+
+
+def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
+                             use_chardiff, freq_sort, file_a, file_b):
+    terminal_width, _ = shutil.get_terminal_size()
+
+    multilines_ref_hypa, error_stats_ref_hypa = process_lines(ref_utts, hypa_utts, False, use_chardiff, False,
+                                            False, terminal_width, False, [], [], False,
+                                            None, None, True, '<eps>')
+    multilines_ref_hypb, error_stats_ref_hypb = process_lines(ref_utts, hypb_utts, False, use_chardiff, False,
+                                                              False, terminal_width, False, [], [], False,
+                                                              None, None, True, '<eps>')
+    _, error_stats_hypa_hypb = process_lines(hypa_utts, hypb_utts, False, use_chardiff, False,
+                                                              True, terminal_width, False, [], [], False,
+                                                              None, None, True, '<eps>')
+
+    for multiline_ref_hypa, multiline_ref_hypb in zip(multilines_ref_hypa,
+                                                      multilines_ref_hypb):
+        multiline_ref_hypa.num_lines = 3
+        line_elements = []
+        for le, le_other in zip(multiline_ref_hypa.line_elements,
+                                multiline_ref_hypb.line_elements):
+            le = LineElement((*le.words, le_other.words[-1],),
+                        (*le.lengths, le_other.lengths[-1],),
+                        le.has_color)
+            line_elements.append(le)
+        multiline_ref_hypa.line_elements = line_elements
+
+    fh.write(f'Per utt details:\nOrder is reference, {file_a}, {file_b}\n')
+    for utt, multiline in zip(error_stats_ref_hypa.utts, multilines_ref_hypa):
+        fh.write(f'{utt}\n')
+        for lines in multiline.iter_construct():
+            for line in lines:
+                fh.write(f'{line}\n')
+
+    # Outputting metrics from gathered statistics.
+    ins_count = sum(error_stats_ref_hypa.ins.values())
+    del_count = sum(error_stats_ref_hypa.dels.values())
+    sub_count = sum(error_stats_ref_hypa.subs.values())
+    wer = (ins_count + del_count + sub_count) / float(error_stats_ref_hypa.total_count)
+    fh.write(f'\nResults with file {file_a}'
+        f'\nWER: {100. * wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats_ref_hypa.total_count})'
+        f'\nSER: {100. * error_stats_ref_hypa.utt_wrong / len(error_stats_ref_hypa.utts):.1f}\n')
+
+    print_detailed_stats(fh, error_stats_ref_hypa.ins, error_stats_ref_hypa.dels,
+                         error_stats_ref_hypa.subs, num_top_errors, freq_sort,
+                         error_stats_ref_hypa.word_counts)
+    fh.write(f'---\n')
+
+    ins_count = sum(error_stats_ref_hypb.ins.values())
+    del_count = sum(error_stats_ref_hypb.dels.values())
+    sub_count = sum(error_stats_ref_hypb.subs.values())
+    wer = (ins_count + del_count + sub_count) / float(error_stats_ref_hypb.total_count)
+    fh.write(f'\nResults with file {file_b}'
+             f'\nWER: {100. * wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats_ref_hypb.total_count})'
+             f'\nSER: {100. * error_stats_ref_hypb.utt_wrong / len(error_stats_ref_hypb.utts):.1f}\n')
+
+    print_detailed_stats(fh, error_stats_ref_hypb.ins, error_stats_ref_hypb.dels,
+                         error_stats_ref_hypb.subs, num_top_errors, freq_sort,
+                         error_stats_ref_hypb.word_counts)
+    fh.write(f'---\n')
+
+    fh.write(f'\nDifference between outputs:\n')
+    print_detailed_stats(fh, error_stats_hypa_hypb.ins, error_stats_hypa_hypb.dels,
+                         error_stats_hypa_hypb.subs, num_top_errors, freq_sort,
+                         error_stats_hypa_hypb.word_counts)
+
+
+def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
                   freq_sort=False, nocolor=False, insert_tok='<eps>'):
@@ -374,176 +631,44 @@ def process_lines(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set=
         group_stats[group]['count'] = 0
         group_stats[group]['errors'] = 0
 
-    ins = defaultdict(int)
-    dels = defaultdict(int)
-    subs = defaultdict(int)
-    total_cost = 0
-    total_count = 0
-    oov_count_denom = 0
-    oov_count_error = 0
-    oov_word_count = 0
-    oov_word_error = 0
-    char_count = 0
-    char_error_count = 0
-    utt_wrong = 0
-    keywords_count = 0
-    keywords_predicted = 0
-    keywords_output = 0
-    word_counts = defaultdict(int)
-    if not skip_detailed:
+    multilines, error_stats = process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
+                  terminal_width, oracle_wer, keywords, oov_set, cer,
+                  utt_group_map, group_stats, nocolor, insert_tok)
+
+    if not skip_detailed and not oracle_wer:
         fh.write('Per utt details:\n')
-    dct_char = {insert_tok: 0, 0: insert_tok}
-    utts = ref_utts.keys()
-    for utt in utts:
-        if debug:
-            print(utt)
-        ref = ref_utts[utt]
-
-        if not len(ref.words):  # skip utterance if empty reference
-            continue
-
-        if oracle_wer:
-            hyps = hyp_utts[utt]
-            costs = []
-            for hyp in hyps:
-                _, _, cost = align_texts(ref.words, hyp.words, debug, use_chardiff=use_chardiff)
-                costs.append(cost)
-            total_cost += min(costs)
-            total_count += len(ref)
-            continue
-
-        hyp = hyp_utts.get(utt)
-        if hyp is None:
-            logger.warning(f'Missing hypothesis for utterance: {utt}')
-            continue
-        if debug:
-            print(ref.words)
-            print(hyp.words)
-
-        if not isctm:
-            ref_aligned, hyp_aligned, cost = align_texts(ref.words, hyp.words, debug, use_chardiff=use_chardiff)
-        else:
-            ref_aligned, hyp_aligned, cost = align_texts_ctm(ref.words, hyp.words, ref.times,
-                hyp.times, ref.durs, hyp.durs, debug, insert_tok)
-        total_cost += cost
-
-        if not skip_detailed:
+        for utt, multiline in zip(error_stats.utts, multilines):
             fh.write(f'{utt}\n')
-
-        # Counting errors
-        error_count = 0
-        ref_word_count = 0
-
-        double_line = DoubleLine(terminal_width)
-        for i, (ref_w, hyp_w,) in enumerate(zip(ref_aligned, hyp_aligned)):
-            if ref_w in keywords:
-                keywords_count += 1
-            if hyp_w in keywords:
-                keywords_output += 1
-            if ref_w in oov_set:
-                oov_word_count += 1
-
-            if ref_w == hyp_w:
-                if hyp_w in keywords:
-                    keywords_predicted += 1
-                double_line.add_lineelement(ref_w, len(ref_w), '', -1, False)
-                word_counts[ref_w] += 1
-                ref_word_count += 1
-            else:
-                error_count += 1
-                if ref_w in oov_set:
-                    oov_word_error += 1
-                if ref_w == '<eps>':
-                    if not nocolor:
-                        double_line.add_lineelement(colored(hyp_w, 'green'), len(hyp_w), '', -1, True)
-                    else:
-                        hyp_w_upper = hyp_w.upper()
-                        double_line.add_lineelement('*', 1, hyp_w_upper, len(hyp_w_upper), False)
-                    ins[hyp_w] += 1
-                elif hyp_w == '<eps>':
-                    if not nocolor:
-                        double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w), '', -1, True)
-                    else:
-                        ref_w_upper = ref_w.upper()
-                        double_line.add_lineelement(ref_w_upper, len(ref_w_upper), '', -1, False)
-                    ref_word_count += 1
-                    dels[ref_w] += 1
-                    word_counts[ref_w] += 1
-                else:
-                    ref_word_count += 1
-                    key = f'{ref_w}>{hyp_w}'
-                    if not nocolor:
-                        double_line.add_lineelement(colored(ref_w, 'red'), len(ref_w),
-                                                    colored(hyp_w, 'green'), len(hyp_w), True)
-                    else:
-                        ref_w_upper = ref_w.upper()
-                        hyp_w_upper = hyp_w.upper()
-                        double_line.add_lineelement(ref_w_upper, len(ref_w_upper),
-                                                    hyp_w_upper, len(hyp_w_upper), False)
-                    subs[key] += 1
-                    word_counts[ref_w] += 1
-        total_count += ref_word_count
-
-        if not skip_detailed:
-            for upper_line, lower_line in double_line.iter_construct():
-                fh.write(upper_line + '\n')
-                fh.write(lower_line + '\n')
-
-        if utt_group_map:
-            group = utt_group_map[utt]
-            group_stats[group]['count'] += ref_word_count
-            group_stats[group]['errors'] += error_count
-
-        if error_count:
-            utt_wrong += 1
-
-        if cer:  # Calculate CER
-            def convert_to_char_list(lst):
-                new = []
-                for i, word in enumerate(lst):
-                    for c in word:
-                        new.append(c)
-                    if i != len(lst) - 1:
-                        new.append(' ')
-                return new
-            char_ref = convert_to_char_list(ref.words)
-            char_hyp = convert_to_char_list(hyp.words)
-
-            ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
-            char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
-            char_count += len(ref_int)
-
-        if oov_set:  # Get OOV CER
-            err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
-            oov_count_error += err
-            oov_count_denom += cnt
+            for upper_line, lower_line in multiline.iter_construct():
+                fh.write(f'{upper_line}\n')
+                fh.write(f'{lower_line}\n')
 
     if not use_chardiff and not oracle_wer:
-        s = sum(v for v in chain(ins.values(), dels.values(), subs.values()))
-        assert s == total_cost, f'{s} {total_cost}'
+        s = sum(v for v in chain(error_stats.ins.values(), error_stats.dels.values(), error_stats.subs.values()))
+        assert s == error_stats.total_cost, f'{s} {error_stats.total_cost}'
     if oracle_wer:
-        fh.write(f'Oracle WER: {total_cost / total_count}\n')
+        fh.write(f'Oracle WER: {error_stats.total_cost / error_stats.total_count}\n')
         return
 
     # Outputting metrics from gathered statistics.
-    ins_count = sum(ins.values())
-    del_count = sum(dels.values())
-    sub_count = sum(subs.values())
-    wer = (ins_count + del_count + sub_count) / float(total_count)
+    ins_count = sum(error_stats.ins.values())
+    del_count = sum(error_stats.dels.values())
+    sub_count = sum(error_stats.subs.values())
+    wer = (ins_count + del_count + sub_count) / float(error_stats.total_count)
     if not skip_detailed:
         fh.write('\n')
-    fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {total_count})'
-             f'\nSER: {100.*utt_wrong / len(utts):.1f}\n')
+    fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats.total_count})'
+             f'\nSER: {100.*error_stats.utt_wrong / len(error_stats.utts):.1f}\n')
 
     if cer:
-        cer = char_error_count / float(char_count)
-        fh.write(f'CER: {100.*cer:.1f} ({char_error_count} / {char_count})\n')
+        cer = error_stats.char_error_count / float(error_stats.char_count)
+        fh.write(f'CER: {100.*cer:.1f} ({error_stats.char_error_count} / {error_stats.char_count})\n')
     if oov_set:
-        fh.write(f'OOV CER: {100.*oov_count_error / oov_count_denom:.1f}\n')
-        fh.write(f'OOV WER: {100.*oov_word_error / oov_word_count:.1f}\n')
+        fh.write(f'OOV CER: {100.*error_stats.oov_count_error / error_stats.oov_count_denom:.1f}\n')
+        fh.write(f'OOV WER: {100.*error_stats.oov_word_error / error_stats.oov_word_count:.1f}\n')
     if keywords:
-        fh.write(f'Keyword results - recall {keywords_predicted / keywords_count if keywords_count else -1:.2f} '
-                 f'- precision {keywords_predicted / keywords_output if keywords_output else -1:.2f}\n')
+        fh.write(f'Keyword results - recall {error_stats.keywords_predicted / error_stats.keywords_count if error_stats.keywords_count else -1:.2f} '
+                 f'- precision {error_stats.keywords_predicted / error_stats.keywords_output if error_stats.keywords_output else -1:.2f}\n')
     if utt_group_map:
         fh.write('Group WERs:\n')
         for group, stats in group_stats.items():
@@ -552,21 +677,8 @@ def process_lines(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set=
         fh.write('\n')
 
     if not skip_detailed:
-        fh.write(f'\nInsertions:\n')
-        for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:num_top_errors]:
-            fh.write(f'{v}\t{c}\n')
-        fh.write('\n')
-        fh.write(f'Deletions:\n')
-        for v, c in sorted(dels.items(), key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0]]),
-                           reverse=True)[:num_top_errors]:
-            fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
-        fh.write('\n')
-        fh.write(f'Substitutions:\n')
-        for v, c in sorted(subs.items(),
-                           key=lambda x: (x[1] if not freq_sort else (x[1] / word_counts[x[0].split('>')[0].strip()], x[1],)),
-                           reverse=True)[:num_top_errors]:
-            ref_w = v.split('>')[0].strip()
-            fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
+        print_detailed_stats(fh, error_stats.ins, error_stats.dels, error_stats.subs, num_top_errors, freq_sort,
+                             error_stats.word_counts)
 
 
 def main(
@@ -585,34 +697,43 @@ def main(
     oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group', 'option', '') = '',
     nocolor: ('Show detailed output in black and white.', 'flag')=False,
-    num_top_errors: ('Number of errors to show per type in detailed output', 'option')=10
+    num_top_errors: ('Number of errors to show per type in detailed output', 'option')=10,
+    second_hyp_f: ('Will compare outputs between two hypothesis files', 'option')=''
     ):
-
-    if oracle_wer:
-        assert isark and not isctm
-        skip_detailed = True
-        if not no_chardiff:
-            logger.warning(f'You probably would prefer running with `-no-chardiff` !')
-
-    oov_set = []
-    if oov_list_f:
-        with open(oov_list_f) as fh:
-            for line in fh:
-                oov_set.append(line.split()[0])
-        oov_set = set(oov_set)
-
-    ref_utts, hyp_utts, keywords, utt_group_map = read_files(fpath_ref,
-        fpath_hyp, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
 
     if outf:
         fh = open(outf, 'w')
     else:
         fh = sys.stdout
+    if not second_hyp_f:
+        if oracle_wer:
+            assert isark and not isctm
+            skip_detailed = True
+            if not no_chardiff:
+                logger.warning(f'You probably would prefer running with `-no-chardiff` !')
 
-    process_lines(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
-                 use_chardiff=not no_chardiff, skip_detailed=skip_detailed,
-                 keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
-                 isctm=isctm, oracle_wer=oracle_wer, nocolor=nocolor, num_top_errors=num_top_errors)
+        oov_set = []
+        if oov_list_f:
+            with open(oov_list_f) as fh:
+                for line in fh:
+                    oov_set.append(line.split()[0])
+            oov_set = set(oov_set)
+
+        ref_utts, hyp_utts, keywords, utt_group_map = read_files(fpath_ref,
+            fpath_hyp, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
+
+        process_output(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
+                     use_chardiff=not no_chardiff, skip_detailed=skip_detailed,
+                     keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
+                     isctm=isctm, oracle_wer=oracle_wer, nocolor=nocolor, num_top_errors=num_top_errors)
+    else:
+        ref_utts = read_ref_file(fpath_ref, isark)
+        hyp_uttsa = read_hyp_file(fpath_hyp, isark, False)
+        hyp_uttsb = read_hyp_file(second_hyp_f, isark, False)
+
+        process_multiple_outputs(ref_utts, hyp_uttsa, hyp_uttsb, fh, num_top_errors,
+                                 not no_chardiff, freq_sort, fpath_hyp, second_hyp_f)
+
     fh.close()
 
 

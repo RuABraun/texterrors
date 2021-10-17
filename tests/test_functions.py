@@ -136,7 +136,7 @@ def test_process_lines():
         hyps[i] = Utt(i, line.split())
 
     buffer = io.StringIO()
-    texterrors.process_lines(refs, hyps, buffer, nocolor=True)
+    texterrors.process_output(refs, hyps, buffer, nocolor=True)
     output = buffer.getvalue()
 
     ref = """Per utt details:
