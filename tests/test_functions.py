@@ -121,19 +121,19 @@ class Utt:
     durs: list = None
 
 
-def test_process_lines():
+def create_inp(lines):
+    utts = {}
+    for line in lines:
+        i, line = line.split(maxsplit=1)
+        utts[i] = Utt(i, line.split())
+    return utts
+
+
+def test_process_output():
     reflines = ['1 zum beispiel work shops wo wir anbieten']
     hyplines = ['1 zum beispiel work shop sommer anbieten']
-    refs = {}
-    for line in reflines:
-        i, line = line.split(maxsplit=1)
-        i = str(i)
-        refs[i] = Utt(i, line.split())
-    hyps = {}
-    for line in hyplines:
-        i, line = line.split(maxsplit=1)
-        i = str(i)
-        hyps[i] = Utt(i, line.split())
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
 
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, nocolor=True)
@@ -142,7 +142,7 @@ def test_process_lines():
     ref = """Per utt details:
 1
 zum beispiel work SHOPS   WO   WIR anbieten
-                  SHOP  SOMMER             
+                  SHOP  SOMMER  *          
 
 WER: 42.9 (ins 0, del 1, sub 2 / 7)
 SER: 100.0
@@ -159,6 +159,75 @@ wo>sommer\t1\t1
 
     assert output == ref
 
+def test_process_output_multi():
+    reflines = ['0 telefonat mit frau spring klee vom siebenundzwanzigsten august einundzwanzig ich erkläre frau spring klee dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktor wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zu meniskus rissen klar geregelt ist']
+    hypalines = ['0 telefonat mit frau sprinkler vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktoren wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus rissen klar geregelt ist\'']
+    hypblines = ['0 telefonat mit frau sprinkle vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktors wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus riss en klar geregelt ist']
+    refs = create_inp(reflines)
+    hypa = create_inp(hypalines)
+    hypb = create_inp(hypblines)
+    buffer = io.StringIO()
+    texterrors.process_multiple_outputs(refs, hypa, hypb, buffer, 10, False, False, 'hypa', 'hypb', terminal_width=203)
+    output = buffer.getvalue()
+    ref = """Per utt details:
+Order is reference, hypa, hypb
+0
+telefonat mit frau  SPRING   KLEE vom siebenundzwanzigsten august einundzwanzig ich erkläre frau  SPRING  KLEE dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
+                   SPRINKLER  *                                                                  SPRINKLE  *                                                                                       
+                   SPRINKLE   *                                                                  SPRINKLE  *                                                                                       
+beziehungsweise dem ungewöhnlichen äusseren  FAKTOR  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie ZU  meniskus RISSEN *  klar geregelt IST 
+                                            FAKTOREN                                                                                       ZUM                                  IST'
+                                            FAKTORS                                                                                        ZUM           RISS  EN                   
+
+Results with file hypa
+WER: 14.3 (ins 0, del 2, sub 5 / 49)
+SER: 100.0
+
+Insertions:
+
+Deletions:
+klee\t2\t2
+
+Substitutions:
+spring>sprinkler\t1\t2
+spring>sprinkle\t1\t2
+faktor>faktoren\t1\t1
+zu>zum\t1\t1
+ist>ist'\t1\t1
+---
+
+Results with file hypb
+WER: 16.3 (ins 1, del 2, sub 5 / 49)
+SER: 100.0
+
+Insertions:
+en\t1
+
+Deletions:
+klee\t2\t2
+
+Substitutions:
+spring>sprinkle\t2\t2
+faktor>faktors\t1\t1
+zu>zum\t1\t1
+rissen>riss\t1\t1
+---
+
+Difference between outputs:
+
+Insertions:
+en\t1
+
+Deletions:
+
+Substitutions:
+sprinkler>sprinkle\t1\t1
+faktoren>faktors\t1\t1
+rissen>riss\t1\t1
+ist'>ist\t1\t1
+"""
+
+    assert ref == output
 
 print('Reminder: texterrors needs to be installed')
 test_levd()

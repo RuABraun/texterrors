@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 from collections import defaultdict
-from itertools import chain
+from itertools import chain, zip_longest
 from typing import List, Tuple, Dict
 import texterrors_align
 import numpy as np
@@ -299,6 +299,12 @@ class MultiLine:
         le = LineElement(words, lengths, has_color)
         self.line_elements.append(le)
 
+    def __len__(self):
+        return len(self.line_elements)
+
+    def __getitem__(self, item):
+        return self.line_elements[item]
+
     @staticmethod
     def construct(*lines):
         joined_lines = []
@@ -483,7 +489,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     else:
                         ref_w_upper = ref_w.upper()
                         double_line.add_lineelement((ref_w_upper, '*',),
-                                                    (len(ref_w_upper), -1,),
+                                                    (len(ref_w_upper), 1,),
                                                     False)
                     ref_word_count += 1
                     error_stats.dels[ref_w] += 1
@@ -542,9 +548,46 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
     return multilines, error_stats
 
 
+def _merge_multilines(multilines_a, multilines_b, terminal_width):
+    multilines = []
+    for multiline_a, multiline_b in zip(multilines_a, multilines_b):
+        multiline = MultiLine(terminal_width, 3)
+        idx_a, idx_b = 0, 0
+        while idx_a < len(multiline_a) and idx_b < len(multiline_b):
+            le_a = multiline_a[idx_a]
+            le_b = multiline_b[idx_b]
+            if le_a.words[0] == le_b.words[0]:
+                multiline.add_lineelement((*le_a.words, le_b.words[-1],),
+                                          (*le_a.lengths, le_b.lengths[-1],),
+                                          le_a.has_color)
+                idx_a += 1
+                idx_b += 1
+            elif le_a.words[0].lower() == le_b.words[0].lower():
+                multiline.add_lineelement((le_a.words[0].upper(), le_a.words[1], le_b.words[1],),
+                                          (*le_a.lengths, le_b.lengths[-1],),
+                                          le_a.has_color)
+                idx_a += 1
+                idx_b += 1
+            elif le_a.words[0] == '*':
+                multiline.add_lineelement((*le_a.words, '',),
+                                          (*le_a.lengths, -1,),
+                                          False)
+                idx_a += 1
+            elif le_b.words[0] == '*':
+                multiline.add_lineelement(('*', '', le_b.words[1],),
+                                          (1, -1, le_b.lengths[1],),
+                                          False)
+                idx_b += 1
+            else:
+                raise RuntimeError('Should not be possible')
+        multilines.append(multiline)
+    return multilines
+
+
 def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
-                             use_chardiff, freq_sort, file_a, file_b):
-    terminal_width, _ = shutil.get_terminal_size()
+                             use_chardiff, freq_sort, file_a, file_b, terminal_width=None):
+    if terminal_width is None:
+        terminal_width, _ = shutil.get_terminal_size()
 
     multilines_ref_hypa, error_stats_ref_hypa = process_lines(ref_utts, hypa_utts, False, use_chardiff, False,
                                             False, terminal_width, False, [], [], False,
@@ -556,20 +599,10 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
                                                               True, terminal_width, False, [], [], False,
                                                               None, None, True, '<eps>')
 
-    for multiline_ref_hypa, multiline_ref_hypb in zip(multilines_ref_hypa,
-                                                      multilines_ref_hypb):
-        multiline_ref_hypa.num_lines = 3
-        line_elements = []
-        for le, le_other in zip(multiline_ref_hypa.line_elements,
-                                multiline_ref_hypb.line_elements):
-            le = LineElement((*le.words, le_other.words[-1],),
-                        (*le.lengths, le_other.lengths[-1],),
-                        le.has_color)
-            line_elements.append(le)
-        multiline_ref_hypa.line_elements = line_elements
-
+    merged_multiline = _merge_multilines(multilines_ref_hypa, multilines_ref_hypb,
+                                         terminal_width)
     fh.write(f'Per utt details:\nOrder is reference, {file_a}, {file_b}\n')
-    for utt, multiline in zip(error_stats_ref_hypa.utts, multilines_ref_hypa):
+    for utt, multiline in zip(error_stats_ref_hypa.utts, merged_multiline):
         fh.write(f'{utt}\n')
         for lines in multiline.iter_construct():
             for line in lines:
