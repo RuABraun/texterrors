@@ -482,7 +482,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                                                     True)
                     else:
                         ref_w_upper = ref_w.upper()
-                        double_line.add_lineelement((ref_w_upper, '',),
+                        double_line.add_lineelement((ref_w_upper, '*',),
                                                     (len(ref_w_upper), -1,),
                                                     False)
                     ref_word_count += 1
