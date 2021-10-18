@@ -404,7 +404,6 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
     error_stats.utts = ref_utts.keys()
-    logger.info(error_stats.ins)
     multilines = []
     for utt in error_stats.utts:
         if debug:
@@ -540,8 +539,6 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
             error_stats.oov_count_denom += cnt
     if not skip_detailed:
         assert len(multilines) == len(error_stats.utts)
-    s = sum(error_stats.subs.values()) + sum(error_stats.ins.values()) + sum(error_stats.dels.values())
-    logger.info(f'sum errors {s}')
     return multilines, error_stats
 
 
