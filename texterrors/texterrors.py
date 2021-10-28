@@ -588,6 +588,7 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
                              use_chardiff, freq_sort, file_a, file_b, terminal_width=None):
     if terminal_width is None:
         terminal_width, _ = shutil.get_terminal_size()
+        terminal_width = 120 if terminal_width >= 120 else terminal_width
 
     multilines_ref_hypa, error_stats_ref_hypa = process_lines(ref_utts, hypa_utts, False, use_chardiff, False,
                                             False, terminal_width, False, [], [], False,
@@ -646,6 +647,7 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
                   keywords=None, utt_group_map=None, oracle_wer=False,
                   freq_sort=False, nocolor=False, insert_tok='<eps>'):
     terminal_width, _ = shutil.get_terminal_size()
+    terminal_width = 120 if terminal_width >= 120 else terminal_width
 
     if oov_set is None:
         oov_set = set()
