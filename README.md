@@ -24,12 +24,12 @@ See here for [background motivation](https://ruabraun.github.io/jekyll/update/20
   
 # Installing  
 Requires minimum python 3.6!  
-```  
+```
 git clone git@github.com:RuABraun/texterrors.git  
 python -m pip install texterrors/  
-```  
+```
 The package will be installed as `texterrors`.  
-  
+
 # Example  
   
 The `texterrors` file will be in your path after running pip install.  
