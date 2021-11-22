@@ -87,12 +87,15 @@ class BuildExt(build_ext):
         build_ext.build_extensions(self)
 
 
+base_dir = os.path.dirname(os.path.realpath(__file__))
 def get_requires():
-    base_dir = os.path.dirname(os.path.realpath(__file__))
     req_path = os.path.join(base_dir, 'requirements.txt')
     install_requires = open(req_path).read().splitlines()
     return install_requires
 
+
+with open(os.path.join(base_dir, "README.md")) as fh:
+    long_description = fh.read()
 
 
 setup(
@@ -103,10 +106,11 @@ setup(
     packages=["texterrors"],
     license="",
     description="For WER",
-    long_description="BLABLA",
+    long_description=long_description,
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExt},
     entry_points={'console_scripts': ['texterrors=texterrors.texterrors:cli']},
     install_requires=get_requires(),
-    setup_requires=['pybind11']
+    setup_requires=['pybind11'],
+    python_requires='>=3.6'
 )
