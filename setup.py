@@ -107,6 +107,7 @@ setup(
     long_description="BLABLA",
     ext_modules=ext_modules,
     cmdclass={"build_ext": BuildExt},
-    scripts=['texterrors/texterrors.py'],
-    install_requires=get_requires()
+    entry_points={'console_scripts': ['texterrors=texterrors.texterrors:cli']},
+    install_requires=get_requires(),
+    setup_requires=['pybind11']
 )

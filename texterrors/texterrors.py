@@ -768,6 +768,8 @@ def main(
 
     fh.close()
 
+def cli():
+    plac.call(main)
 
 if __name__ == "__main__":
     plac.call(main)
