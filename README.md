@@ -13,19 +13,17 @@ Features:
 - Sorting most common errors by frequency or count
 - Measuring performance on keywords
 - Measuring OOV-CER (see [https://arxiv.org/abs/2107.08091](https://arxiv.org/abs/2107.08091) )
-- Fancy colored output to inspect errors (example below)! (optional)
+- Colored output to inspect errors
 
-Red is what the model missed (deletion or the reference word in substitution error). Read the white and red words to read the reference.  
-  
-Green is what the model output incorrectly (insertion or the hypothesis word in substitution error). Read the white and green words to read the hypothesis.  
-  
+Example of colored output below (use `-c` flag). Read the white and red words to read the reference. Read the white and green words to read the hypothesis.  
+
 ![Example](docs/images/texterrors_example.png)   
 
 See here for [background motivation](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).  
 
   
 # Installing  
-Requires minimum python 3.6! And the `pybind11` package should already be installed.  
+Requires minimum python 3.6!  
 ```  
 git clone --recurse-submodules git@github.com:RuABraun/texterrors.git  
 python -m pip install texterrors/  
@@ -34,29 +32,33 @@ The package will be installed as `texterrors`.
   
 # Example  
   
-The `texterrors.py` file will be in your path after running pip install.  
+The `texterrors` file will be in your path after running pip install.  
   
-The `-s` option means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID.  
+The `-s` option means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID (therefore the `isark` flag).  
 ```  
-$ texterrors.py -isark -s ref hyp  
+$ texterrors -isark -s ref hyp  
 WER: 83.33 (ins 1, del 1, sub 3 / 6)  
 ```  
   
-You can specify an output file to save the results, probably what you if you are getting detailed output.  
+You can specify an output file to save the results, probably what you if you are getting detailed output (not using `-s`). 
+Here we are also calculating the CER, the OOV-CER to measure the performance on the OOV words inside the `oov_list` file, and using
+colored output (therefore the `-c` flag).
 ```  
-$ texterrors.py -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output  
+$ texterrors -c -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output  
 ```  
-**Use `less -R` to view the colored output. You can use `-nocolor` to disable the coloring.**
+**Use `less -R` to view the colored output. Skip the `-c` flag to not use color.**
 
-Check `texterrors/__init__.py` to see the functions that you can may be interested in using from python. 
+Check `texterrors/__init__.py` to see the functions that you may be interested in using from python. 
 
 # Options you might want to use
-There are more options, call with `-h` to see.  
+Call `texterrors -h` to see all options.  
   
 `-cer`, `-isctm`
 
 `-utt-group-map` - Should be a file which maps uttids to group, WER will be output per group (could use  
 to get per speaker WER for example).  
+
+`-second-hyp-f` - Use to compare the outputs of two different models to the reference.
   
 `-freq-sort` - Sort errors by frequency rather than count
   

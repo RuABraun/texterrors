@@ -728,7 +728,7 @@ def main(
     freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count).', 'flag', None) = False,
     oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER.', 'flag', None) = False,
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group.', 'option', '') = '',
-    usecolor: ('Show detailed output with color. Red/white is reference, Green/white model output.', 'flag', 'c')=False,
+    usecolor: ('Show detailed output with color (use less -R). Red/white is reference, Green/white model output.', 'flag', 'c')=False,
     num_top_errors: ('Number of errors to show per type in detailed output.', 'option')=10,
     second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')=''
     ):
