@@ -718,19 +718,19 @@ def main(
     fpath_hyp: 'Hypothesis text',
     outf: 'Optional output file' = '',
     oov_list_f: ('List of OOVs', 'option', None) = '',
-    isark: ('', 'flag')=False,
-    isctm: ('', 'flag')=False,
-    no_chardiff: ("Don't use character lev distance for alignment", 'flag') = False,
-    cer: ('', 'flag')=False,
-    debug: ('Print debug messages, will write cost matrix to summedcost', 'flag', 'd')=False,
+    isark: ('Text files start with utterance ID.', 'flag')=False,
+    isctm: ('Text files start with utterance ID and end with word, time, duration', 'flag')=False,
+    no_chardiff: ('Don\'t use character lev distance for alignment.', 'flag') = False,
+    cer: ('Calculate CER', 'flag')=False,
+    debug: ('Print debug messages, will write cost matrix to summedcost.', 'flag', 'd')=False,
     skip_detailed: ('No per utterance output', 'flag', 's') = False,
     keywords_f: ('Will filter out non keyword reference words.', 'option', None) = '',
-    freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count)', 'flag', None) = False,
-    oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER', 'flag', None) = False,
-    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group', 'option', '') = '',
-    nocolor: ('Show detailed output in black and white.', 'flag')=False,
-    num_top_errors: ('Number of errors to show per type in detailed output', 'option')=10,
-    second_hyp_f: ('Will compare outputs between two hypothesis files', 'option')=''
+    freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count).', 'flag', None) = False,
+    oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER.', 'flag', None) = False,
+    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group.', 'option', '') = '',
+    usecolor: ('Show detailed output with color. Red/white is reference, Green/white model output.', 'flag', 'c')=False,
+    num_top_errors: ('Number of errors to show per type in detailed output.', 'option')=10,
+    second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')=''
     ):
 
     if outf:
@@ -757,7 +757,7 @@ def main(
         process_output(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
                      use_chardiff=not no_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
-                     isctm=isctm, oracle_wer=oracle_wer, nocolor=nocolor, num_top_errors=num_top_errors)
+                     isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors)
     else:
         ref_utts = read_ref_file(fpath_ref, isark)
         hyp_uttsa = read_hyp_file(fpath_hyp, isark, False)

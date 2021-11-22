@@ -5,9 +5,10 @@ For calculating WER, CER, other metrics, getting detailed statistics and compari
 
 Meant to replace older tools like `sclite` by being easy to use, modify and extend.    
   
-Features:  
+Features:
 - Character aware (default), standard and ctm based alignment
-- Metrics by group (for example speaker) 
+- Metrics by group (for example speaker)
+- Comparing two hypothesis files to reference
 - Oracle WER
 - Sorting most common errors by frequency or count
 - Measuring performance on keywords

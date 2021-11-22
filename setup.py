@@ -4,7 +4,7 @@ import os
 import setuptools
 import sys
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 
 class get_pybind_include(object):
@@ -18,7 +18,6 @@ class get_pybind_include(object):
 
     def __str__(self):
         import pybind11
-
         return pybind11.get_include(self.user)
 
 
