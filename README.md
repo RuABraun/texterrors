@@ -25,14 +25,11 @@ See here for [background motivation](https://ruabraun.github.io/jekyll/update/20
 # Installing  
 Requires minimum python 3.6!  
 ```
-git clone git@github.com:RuABraun/texterrors.git  
-python -m pip install texterrors/  
+pip install texterrors
 ```
-The package will be installed as `texterrors`.  
+The package will be installed as `texterrors` and there will be a `texterrors` script in your path.  
 
 # Example  
-  
-The `texterrors` file will be in your path after running pip install.  
   
 The `-s` option means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID (therefore the `isark` flag).  
 ```  
@@ -48,12 +45,12 @@ $ texterrors -c -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 ```  
 **Use `less -R` to view the colored output. Skip the `-c` flag to not use color.**
 
-Check `texterrors/__init__.py` to see the functions that you may be interested in using from python. 
+Check `texterrors/__init__.py` to see functions that you may be interested in using from python. 
 
 # Options you might want to use
 Call `texterrors -h` to see all options.  
   
-`-cer`, `-isctm`
+`-cer`, `-isctm` - Calculate CER, Use ctms for alignment
 
 `-utt-group-map` - Should be a file which maps uttids to group, WER will be output per group (could use  
 to get per speaker WER for example).  
@@ -92,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
   
+- 22.11. new feature to compare two outputs to reference; lots of small changes 
 - 04.10. fixed bug, nocolor option, refactoring, keywords feature works properly, updated README
 - 22.08. added oracle wer feature, cost matrix creation returns cost now  
 - 16.07. improves alignment based on ctms (much stricter now).  
