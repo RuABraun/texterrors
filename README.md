@@ -88,8 +88,9 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 # Changelog
 
 Recent changes:  
-  
-- 22.11. new feature to compare two outputs to reference; lots of small changes 
-- 04.10. fixed bug, nocolor option, refactoring, keywords feature works properly, updated README
-- 22.08. added oracle wer feature, cost matrix creation returns cost now  
-- 16.07. improves alignment based on ctms (much stricter now).  
+
+- 26.01.22 fixed bug causing OOV-CER feature to not work
+- 22.11.21 new feature to compare two outputs to reference; lots of small changes 
+- 04.10.21 fixed bug, nocolor option, refactoring, keywords feature works properly, updated README
+- 22.08.21 added oracle wer feature, cost matrix creation returns cost now  
+- 16.07.21 improves alignment based on ctms (much stricter now).  
