@@ -709,8 +709,11 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
         cer = error_stats.char_error_count / float(error_stats.char_count)
         fh.write(f'CER: {100.*cer:.1f} ({error_stats.char_error_count} / {error_stats.char_count})\n')
     if oov_set:
-        fh.write(f'OOV CER: {100.*error_stats.oov_count_error / error_stats.oov_count_denom:.1f}\n')
-        fh.write(f'OOV WER: {100.*error_stats.oov_word_error / error_stats.oov_word_count:.1f}\n')
+        if error_stats.oov_word_count:
+            fh.write(f'OOV CER: {100.*error_stats.oov_count_error / error_stats.oov_count_denom:.1f}\n')
+            fh.write(f'OOV WER: {100.*error_stats.oov_word_error / error_stats.oov_word_count:.1f}\n')
+        else:
+            logger.error('None of the words in the OOV list file were found in the reference!')
     if keywords:
         fh.write(f'Keyword results - recall {error_stats.keywords_predicted / error_stats.keywords_count if error_stats.keywords_count else -1:.2f} '
                  f'- precision {error_stats.keywords_predicted / error_stats.keywords_output if error_stats.keywords_output else -1:.2f}\n')

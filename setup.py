@@ -4,7 +4,7 @@ import os
 import setuptools
 import sys
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 
 class get_pybind_include(object):
