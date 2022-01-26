@@ -749,9 +749,11 @@ def main(
     second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')=''
     ):
 
+    logger.remove()
     if debug:
-        logger.remove()
         logger.add(sys.stderr, level="DEBUG")
+    else:
+        logger.add(sys.stderr, level="INFO")
 
     if outf:
         fh = open(outf, 'w')
