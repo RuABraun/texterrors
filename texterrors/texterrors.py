@@ -1,15 +1,18 @@
 #!/usr/bin/env python
+import shutil
 import sys
 from collections import defaultdict
-from itertools import chain, zip_longest
+from dataclasses import dataclass, field
+from itertools import chain
 from typing import List, Tuple, Dict
-import texterrors_align
+
+import jieba
 import numpy as np
 import plac
+import regex as re
+import texterrors_align
 from loguru import logger
 from termcolor import colored
-import shutil
-from dataclasses import dataclass, field
 
 OOV_SYM = '<unk>'
 
@@ -229,16 +232,26 @@ class Utt:
     durs: list = None
 
 
+def split_if_chinese(words_list):
+    if re.search(u'[\u4e00-\u9fff]', words_list[0]):
+        assert len(words_list) == 1, f'Line {words_list} has Chinese but has spaces in line when there should be none!'
+        return jieba.lcut(words_list[0], cut_all=False)
+    else:
+        return words_list
+
+
 def read_ref_file(ref_f, isark):
     ref_utts = {}
     with open(ref_f) as fh:
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
+                words = split_if_chinese(words)
                 assert utt not in ref_utts, 'There are repeated utterances in reference file! Exiting'
                 ref_utts[utt] = Utt(utt, words)
             else:
                 words = line.split()
+                words = split_if_chinese(words)
                 i = str(i)
                 ref_utts[i] = Utt(i, words)
     return ref_utts
@@ -250,6 +263,7 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
+                words = split_if_chinese(words)
                 words = [w for w in words if w != OOV_SYM]
                 if not oracle_wer:
                     hyp_utts[utt] = Utt(utt, words)
@@ -257,6 +271,7 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
                     hyp_utts[utt].append(Utt(utt, words))
             else:
                 words = line.split()
+                words = split_if_chinese(words)
                 i = str(i)
                 hyp_utts[i] = Utt(i, [w for w in words if w != OOV_SYM])
     return hyp_utts
@@ -406,18 +421,18 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
 
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
-                  group_stats, nocolor, insert_tok):
+                  group_stats, nocolor, insert_tok, suppress_warnings=False):
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
     error_stats.utts = ref_utts.keys()
     multilines = []
     for utt in error_stats.utts:
-        if debug:
-            print(utt)
+        logger.debug('%s' % utt)
         ref = ref_utts[utt]
 
         if not len(ref.words):  # skip utterance if empty reference
-            logger.warning(f'Skipping empty utterance {utt}')
+            if not suppress_warnings:
+                logger.warning(f'Skipping empty utterance {utt}')
             continue
 
         if oracle_wer:
@@ -434,9 +449,8 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
         if hyp is None:
             logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
-        if debug:
-            print(ref.words)
-            print(hyp.words)
+        logger.debug('ref: %s' % ref.words)
+        logger.debug('hyp: %s' % hyp.words)
 
         if not isctm:
             ref_aligned, hyp_aligned, cost = align_texts(ref.words, hyp.words, debug, use_chardiff=use_chardiff)
@@ -526,8 +540,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
             def convert_to_char_list(lst):
                 new = []
                 for i, word in enumerate(lst):
-                    for c in word:
-                        new.append(c)
+                    new.extend(list(word))
                     if i != len(lst) - 1:
                         new.append(' ')
                 return new
@@ -733,6 +746,10 @@ def main(
     second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')=''
     ):
 
+    if debug:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
     if outf:
         fh = open(outf, 'w')
     else:
@@ -744,12 +761,11 @@ def main(
             if not no_chardiff:
                 logger.warning(f'You probably would prefer running with `-no-chardiff` !')
 
-        oov_set = []
+        oov_set = set()
         if oov_list_f:
-            with open(oov_list_f) as fh:
-                for line in fh:
-                    oov_set.append(line.split()[0])
-            oov_set = set(oov_set)
+            with open(oov_list_f) as fh_oov:
+                for line in fh_oov:
+                    oov_set.add(line.split()[0])  # splitting incase line contains another entry (for example count)
 
         ref_utts, hyp_utts, keywords, utt_group_map = read_files(fpath_ref,
             fpath_hyp, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
@@ -768,8 +784,10 @@ def main(
 
     fh.close()
 
-def cli():
+
+def cli():  # entrypoint used in setup.py
     plac.call(main)
+
 
 if __name__ == "__main__":
     plac.call(main)

@@ -29,10 +29,10 @@ pip install texterrors
 ```
 The package will be installed as `texterrors` and there will be a `texterrors` script in your path.  
 
-# Example  
-  
+# Example
+
 The `-s` option means there will be no detailed output. Below `ref` and `hyp` are files with the first field equalling the utterance ID (therefore the `isark` flag).  
-```  
+```
 $ texterrors -isark -s ref hyp  
 WER: 83.33 (ins 1, del 1, sub 3 / 6)  
 ```  
