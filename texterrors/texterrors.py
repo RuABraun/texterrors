@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Tuple, Dict
 
-import jieba
 import numpy as np
 import plac
 import regex as re
