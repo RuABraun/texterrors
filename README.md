@@ -37,7 +37,7 @@ $ texterrors -isark -s ref hyp
 WER: 83.33 (ins 1, del 1, sub 3 / 6)  
 ```  
   
-You can specify an output file to save the results, probably what you if you are getting detailed output (not using `-s`). 
+You can specify an output file to save the results, probably what you want if you are getting detailed output (not using `-s`). 
 Here we are also calculating the CER, the OOV-CER to measure the performance on the OOV words inside the `oov_list` file, and using
 colored output (therefore the `-c` flag).
 ```  
@@ -89,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 27.01.22 oracle WER and small bug fixes
 - 26.01.22 fixed bug causing OOV-CER feature to not work
 - 22.11.21 new feature to compare two outputs to reference; lots of small changes 
 - 04.10.21 fixed bug, nocolor option, refactoring, keywords feature works properly, updated README

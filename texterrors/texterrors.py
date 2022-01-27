@@ -249,12 +249,14 @@ def read_ref_file(ref_f, isark):
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
-                words = split_if_chinese(words)
+                if words:
+                    words = split_if_chinese(words)
                 assert utt not in ref_utts, 'There are repeated utterances in reference file! Exiting'
                 ref_utts[utt] = Utt(utt, words)
             else:
                 words = line.split()
-                words = split_if_chinese(words)
+                if words:
+                    words = split_if_chinese(words)
                 i = str(i)
                 ref_utts[i] = Utt(i, words)
     return ref_utts
@@ -266,7 +268,6 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
-                words = split_if_chinese(words)
                 words = [w for w in words if w != OOV_SYM]
                 if not oracle_wer:
                     hyp_utts[utt] = Utt(utt, words)
@@ -274,7 +275,6 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
                     hyp_utts[utt].append(Utt(utt, words))
             else:
                 words = line.split()
-                words = split_if_chinese(words)
                 i = str(i)
                 hyp_utts[i] = Utt(i, [w for w in words if w != OOV_SYM])
     return hyp_utts
