@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Tuple, Dict
 
+import jieba
 import numpy as np
 import plac
 import regex as re
@@ -229,6 +230,9 @@ class Utt:
     words: list
     times: list = None
     durs: list = None
+
+    def __len__(self):
+        return len(self.words)
 
 
 def split_if_chinese(words_list):
