@@ -555,8 +555,8 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
             err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
             error_stats.oov_count_error += err
             error_stats.oov_count_denom += cnt
-    if not skip_detailed:
-        assert len(multilines) == len(error_stats.utts)
+    # if not skip_detailed:
+        # assert len(multilines) == len(error_stats.utts)
     return multilines, error_stats
 
 
