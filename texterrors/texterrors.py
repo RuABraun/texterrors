@@ -347,13 +347,9 @@ class MultiLine:
             pad_len_plus_color = padded_len + 9 if le.has_color else padded_len
             words = le.words
             for i, line in enumerate(lines):
-                if i == 0:
-                    line.append(f'{words[0]:^{pad_len_plus_color}}')
-                else:
-                    if lengths[i] != -1:
-                        line.append(f'{words[i]:^{pad_len_plus_color}}')
-                    else:
-                        line.append(f'{words[i]:^{padded_len}}')
+                wordlen = pad_len_plus_color if lengths[i] != -1 else padded_len
+                line.append(f'{words[i]:^{wordlen}}')
+
             index += 1
         joined_lines = self.construct(*lines)
         yield joined_lines
@@ -489,8 +485,8 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     error_stats.oov_word_error += 1
                 if ref_w == '<eps>':
                     if not nocolor:
-                        double_line.add_lineelement((colored(hyp_w, 'green'), '',),
-                                                    (len(hyp_w), -1,),
+                        double_line.add_lineelement(('', colored(hyp_w, 'green'),),
+                                                    (-1, len(hyp_w),),
                                                     True)
                     else:
                         hyp_w_upper = hyp_w.upper()
