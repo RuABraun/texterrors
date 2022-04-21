@@ -485,7 +485,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     error_stats.oov_word_error += 1
                 if ref_w == '<eps>':
                     if not nocolor:
-                        double_line.add_lineelement(('', colored(hyp_w, 'green'),),
+                        double_line.add_lineelement(('', colored(hyp_w, 'red'),),
                                                     (-1, len(hyp_w),),
                                                     True)
                     else:
@@ -496,7 +496,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     error_stats.ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
                     if not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'red'), '',),
+                        double_line.add_lineelement((colored(ref_w, 'green'), '',),
                                                     (len(ref_w), -1,),
                                                     True)
                     else:
@@ -511,7 +511,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     ref_word_count += 1
                     key = f'{ref_w}>{hyp_w}'
                     if not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'red'), colored(hyp_w, 'green'),),
+                        double_line.add_lineelement((colored(ref_w, 'green'), colored(hyp_w, 'red'),),
                                                     (len(ref_w), len(hyp_w),),
                                                     True)
                     else:
@@ -680,7 +680,8 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
                   utt_group_map, group_stats, nocolor, insert_tok)
 
     if not skip_detailed and not oracle_wer:
-        fh.write('Per utt details:\n')
+        fh.write(f'First file is treated as reference (white and green), second as hypothesis (white and red).\n'
+                 f'Per utt details:\n')
         for utt, multiline in zip(error_stats.utts, multilines):
             fh.write(f'{utt}\n')
             for upper_line, lower_line in multiline.iter_construct():

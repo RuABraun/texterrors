@@ -15,7 +15,7 @@ Features:
 - Measuring OOV-CER (see [https://arxiv.org/abs/2107.08091](https://arxiv.org/abs/2107.08091) )
 - Colored output to inspect errors
 
-Example of colored output below (use `-c` flag). Read the white and red words to read the reference. Read the white and green words to read the hypothesis.  
+Example of colored output below (use `-c` flag). Read the white and green words to read the reference. Read the white and red words to read the hypothesis.  
 
 ![Example](docs/images/texterrors_example.png)   
 
