@@ -89,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 21.04.22 insertion errors on lower line and switching colors so green is reference
 - 27.01.22 oracle WER and small bug fixes
 - 26.01.22 fixed bug causing OOV-CER feature to not work
 - 22.11.21 new feature to compare two outputs to reference; lots of small changes 
