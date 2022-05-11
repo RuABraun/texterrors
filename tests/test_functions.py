@@ -139,7 +139,8 @@ def test_process_output():
     texterrors.process_output(refs, hyps, buffer, nocolor=True)
     output = buffer.getvalue()
 
-    ref = """Per utt details:
+    ref = """First file is treated as reference (white and green), second as hypothesis (white and red).
+Per utt details:
 1
 zum beispiel work SHOPS   WO   WIR anbieten
                   SHOP  SOMMER  *          
