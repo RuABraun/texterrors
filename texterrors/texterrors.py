@@ -170,7 +170,10 @@ def align_texts_ctm(text_a_str, text_b_str, times_a, times_b, durs_a, durs_b, de
 def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
     assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
-    assert isinstance(text_a[0], str)
+    if len(text_a) > 0:
+        assert isinstance(text_a[0], str)
+    if len(text_b) > 0:
+        assert isinstance(text_b[0], str)
 
     aligned_a, aligned_b, cost = _align_texts(text_a, text_b, use_chardiff,
                                               debug=debug, insert_tok=insert_tok)
@@ -423,16 +426,12 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   group_stats, nocolor, insert_tok, suppress_warnings=False):
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
-    error_stats.utts = ref_utts.keys()
     multilines = []
-    for utt in error_stats.utts:
+    for utt in ref_utts.keys():
         logger.debug('%s' % utt)
         ref = ref_utts[utt]
 
-        if not len(ref.words):  # skip utterance if empty reference
-            if not suppress_warnings:
-                logger.warning(f'Skipping empty utterance {utt}')
-            continue
+        is_empty_reference = not len(ref.words)
 
         if oracle_wer:
             hyps = hyp_utts[utt]
@@ -448,6 +447,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
         if hyp is None:
             logger.warning(f'Missing hypothesis for utterance: {utt}')
             continue
+        error_stats.utts.append(utt)
         logger.debug('ref: %s' % ref.words)
         logger.debug('hyp: %s' % hyp.words)
 
@@ -550,6 +550,9 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
             ref_int, hyp_int = convert_to_int(char_ref, char_hyp, dct_char)
             error_stats.char_error_count += texterrors_align.lev_distance(ref_int, hyp_int)
             error_stats.char_count += len(ref_int)
+
+        if is_empty_reference:
+            continue
 
         if oov_set:  # Get OOV CER
             err, cnt = get_oov_cer(ref_aligned, hyp_aligned, oov_set)
