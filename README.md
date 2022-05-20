@@ -89,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 20.05.22 fixed bug missing regex dependency
 - 16.05.22 fixed bug causing wrong detailed output when there is utterance with empty reference, and utts with empty reference are not ignored
 - 21.04.22 insertion errors on lower line and switching colors so green is reference
 - 27.01.22 oracle WER and small bug fixes
