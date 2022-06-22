@@ -4,5 +4,4 @@ numpy
 loguru
 termcolor
 Levenshtein
-jieba
 regex
