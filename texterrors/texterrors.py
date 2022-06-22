@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Tuple, Dict
 
-import jieba
 import numpy as np
 import plac
 import regex as re
@@ -33,6 +32,7 @@ def convert_to_int(lst_a, lst_b, dct):
 
 
 def lev_distance(a, b):
+    """ This function assumes that elements of a and b are fixed width. """
     if isinstance(a, str):
         return texterrors_align.lev_distance_str(a, b)
     else:
@@ -40,70 +40,36 @@ def lev_distance(a, b):
 
 
 def seq_distance(a, b):
+    """ This function is for when a and b have strings as elements (variable length). """
     len_a = len(a)
     len_b = len(b)
-    # doing dynamic time warp
-    a = ['<>'] + a
-    b = ['<>'] + b
-    # +1 because of padded start token
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
     cost = texterrors_align.calc_sum_cost(summed_cost, a, b, False)
     return cost
 
 
-def _align_texts(text_a_str, text_b_str, use_chardiff, debug, insert_tok):
-    len_a = len(text_a_str)
-    len_b = len(text_b_str)
-    # doing dynamic time warp
-    text_a_str = [insert_tok] + text_a_str
-    text_b_str = [insert_tok] + text_b_str
-    # +1 because of padded start token
-    summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
-    cost = texterrors_align.calc_sum_cost(summed_cost, text_a_str, text_b_str, use_chardiff)
+def _align_texts(words_a, words_b, use_chardiff, debug, insert_tok): 
+    summed_cost = np.zeros((len(words_a) + 1, len(words_b) + 1), dtype=np.float64, 
+        order="C")
+    cost = texterrors_align.calc_sum_cost(summed_cost, words_a, words_b, use_chardiff)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
-    best_path_lst = []
-    texterrors_align.get_best_path(summed_cost, best_path_lst, text_a_str, text_b_str, use_chardiff)
-    assert len(best_path_lst) % 2 == 0
-    path = []
-    for n in range(0, len(best_path_lst), 2):
-        i = best_path_lst[n]
-        j = best_path_lst[n + 1]
-        path.append((i, j))
 
-    # convert hook (up left or left up) transitions to diag, not important.
-    # -1 because of padding tokens, i = 1 because first is given
-    newpath = [path[0]]
-    i = 1
-    lasttpl = path[0]
-    while i < len(path) - 1:
-        tpl = path[i]
-        nexttpl = path[i + 1]
-        if (
-            lasttpl[0] - 1 == nexttpl[0] and lasttpl[1] - 1 == nexttpl[1]
-        ):  # minus because reversed
-            pass
-        else:
-            newpath.append(tpl)
-        i += 1
-        lasttpl = tpl
-    path = newpath
+    best_path_reversed = texterrors_align.get_best_path(summed_cost, 
+        words_a, words_b, use_chardiff)
 
     aligned_a, aligned_b = [], []
-    lasti, lastj = -1, -1
-    for i, j in list(reversed(path)):
-        # print(text_a[i], text_b[i], file=sys.stderr)
-        if i != lasti:
-            aligned_a.append(text_a_str[i])
-        else:
+    for i, j in reversed(best_path_reversed):
+        if i == -1:
             aligned_a.append(insert_tok)
-        if j != lastj:
-            aligned_b.append(text_b_str[j])
         else:
+            aligned_a.append(words_a[i])
+        if j == -1:
             aligned_b.append(insert_tok)
-        lasti, lastj = i, j
+        else:
+            aligned_b.append(words_b[j])
 
     return aligned_a, aligned_b, cost
 
@@ -238,28 +204,16 @@ class Utt:
         return len(self.words)
 
 
-def split_if_chinese(words_list):
-    if re.search(u'[\u4e00-\u9fff]', words_list[0]):
-        assert len(words_list) == 1, f'Line {words_list} has Chinese but has spaces in line when there should be none!'
-        return jieba.lcut(words_list[0], cut_all=False)
-    else:
-        return words_list
-
-
 def read_ref_file(ref_f, isark):
     ref_utts = {}
     with open(ref_f) as fh:
         for i, line in enumerate(fh):
             if isark:
                 utt, *words = line.split()
-                if words:
-                    words = split_if_chinese(words)
                 assert utt not in ref_utts, 'There are repeated utterances in reference file! Exiting'
                 ref_utts[utt] = Utt(utt, words)
             else:
                 words = line.split()
-                if words:
-                    words = split_if_chinese(words)
                 i = str(i)
                 ref_utts[i] = Utt(i, words)
     return ref_utts
@@ -408,12 +362,12 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
     for v, c in sorted(ins.items(), key=lambda x: x[1], reverse=True)[:num_top_errors]:
         fh.write(f'{v}\t{c}\n')
     fh.write('\n')
-    fh.write(f'Deletions:\n')
+    fh.write(f'Deletions (second number is word count total):\n')
     for v, c in sorted(dels.items(), key=lambda x: (x[1] if not freq_sort else x[1] / word_counts[x[0]]),
                        reverse=True)[:num_top_errors]:
         fh.write(f'{v}\t{c}\t{word_counts[v]}\n')
     fh.write('\n')
-    fh.write(f'Substitutions:\n')
+    fh.write(f'Substitutions (reference>hypothesis, second number is reference word count total):\n')
     for v, c in sorted(subs.items(),
                        key=lambda x: (x[1] if not freq_sort else (x[1] / word_counts[x[0].split('>')[0].strip()], x[1],)),
                        reverse=True)[:num_top_errors]:
@@ -683,8 +637,11 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
                   utt_group_map, group_stats, nocolor, insert_tok)
 
     if not skip_detailed and not oracle_wer:
-        fh.write(f'First file is treated as reference (white and green), second as hypothesis (white and red).\n'
-                 f'Per utt details:\n')
+        if nocolor:
+            fh.write(f'First file is treated as reference, second as hypothesis. Errors are capitalized.\n')
+        else:
+            fh.write(f'First file is treated as reference (white and green), second as hypothesis (white and red).\n')
+        fh.write(f'Per utt details:\n')
         for utt, multiline in zip(error_stats.utts, multilines):
             fh.write(f'{utt}\n')
             for upper_line, lower_line in multiline.iter_construct():
@@ -733,13 +690,13 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
 
 
 def main(
-    fpath_ref: 'Reference text',
-    fpath_hyp: 'Hypothesis text',
+    ref_file: 'Reference text',
+    hyp_file: 'Hypothesis text',
     outf: 'Optional output file' = '',
     oov_list_f: ('List of OOVs', 'option', None) = '',
     isark: ('Text files start with utterance ID.', 'flag')=False,
     isctm: ('Text files start with utterance ID and end with word, time, duration', 'flag')=False,
-    no_chardiff: ('Don\'t use character lev distance for alignment.', 'flag') = False,
+    use_chardiff: ('Use character lev distance for better alignment in exchange for slightly higher WER.', 'flag') = False,
     cer: ('Calculate CER', 'flag')=False,
     debug: ('Print debug messages, will write cost matrix to summedcost.', 'flag', 'd')=False,
     skip_detailed: ('No per utterance output', 'flag', 's') = False,
@@ -766,29 +723,32 @@ def main(
         if oracle_wer:
             assert isark and not isctm
             skip_detailed = True
-            if not no_chardiff:
-                logger.warning(f'You probably would prefer running with `-no-chardiff` !')
+            if use_chardiff:
+                logger.warning(f'You probably would prefer running without `-use_chardiff`, the WER will be slightly better for the cost of a worse alignment')
 
         oov_set = set()
         if oov_list_f:
+            if not use_chardiff:
+                logger.warning('Because you are using standard alignment (not `-use_chardiff`) the alignments could be suboptimal\n'
+                               ' which will lead to the OOV-CER being slightly wrong. Use `-use_chardiff` for better alignment, ctm based for the best.')
             with open(oov_list_f) as fh_oov:
                 for line in fh_oov:
                     oov_set.add(line.split()[0])  # splitting incase line contains another entry (for example count)
 
-        ref_utts, hyp_utts, keywords, utt_group_map = read_files(fpath_ref,
-            fpath_hyp, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
+        ref_utts, hyp_utts, keywords, utt_group_map = read_files(ref_file,
+            hyp_file, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
 
         process_output(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
-                     use_chardiff=not no_chardiff, skip_detailed=skip_detailed,
+                     use_chardiff=use_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
                      isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors)
     else:
-        ref_utts = read_ref_file(fpath_ref, isark)
-        hyp_uttsa = read_hyp_file(fpath_hyp, isark, False)
+        ref_utts = read_ref_file(ref_file, isark)
+        hyp_uttsa = read_hyp_file(hyp_file, isark, False)
         hyp_uttsb = read_hyp_file(second_hyp_f, isark, False)
 
         process_multiple_outputs(ref_utts, hyp_uttsa, hyp_uttsb, fh, num_top_errors,
-                                 not no_chardiff, freq_sort, fpath_hyp, second_hyp_f)
+                                 use_chardiff, freq_sort, hyp_file, second_hyp_f)
 
     fh.close()
 

@@ -1,8 +1,9 @@
-""" ! Reminder: texterrors needs to be installed """
+""" Run command: PYTHONPATH=. pytest .
+"""
 import io
 
 import Levenshtein as levd
-import texterrors
+from texterrors import texterrors
 from dataclasses import dataclass
 
 
@@ -139,25 +140,24 @@ def test_process_output():
     texterrors.process_output(refs, hyps, buffer, nocolor=True)
     output = buffer.getvalue()
 
-    ref = """First file is treated as reference (white and green), second as hypothesis (white and red).
+    ref = """First file is treated as reference, second as hypothesis. Errors are capitalized.
 Per utt details:
 1
-zum beispiel work SHOPS   WO   WIR anbieten
-                  SHOP  SOMMER  *          
+zum beispiel work SHOPS WO  WIR   anbieten
+                  SHOP  *  SOMMER         
 
 WER: 42.9 (ins 0, del 1, sub 2 / 7)
 SER: 100.0
 
 Insertions:
 
-Deletions:
-wir\t1\t1
+Deletions (second number is word count total):
+wo\t1\t1
 
-Substitutions:
+Substitutions (reference>hypothesis, second number is reference word count total):
 shops>shop\t1\t1
-wo>sommer\t1\t1
+wir>sommer\t1\t1
 """
-
     assert output == ref
 
 def test_process_output_multi():
@@ -173,12 +173,12 @@ def test_process_output_multi():
     ref = """Per utt details:
 Order is reference, hypa, hypb
 0
-telefonat mit frau  SPRING   KLEE vom siebenundzwanzigsten august einundzwanzig ich erkläre frau  SPRING  KLEE dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
-                   SPRINKLER  *                                                                  SPRINKLE  *                                                                                       
-                   SPRINKLE   *                                                                  SPRINKLE  *                                                                                       
-beziehungsweise dem ungewöhnlichen äusseren  FAKTOR  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie ZU  meniskus RISSEN *  klar geregelt IST 
-                                            FAKTOREN                                                                                       ZUM                                  IST'
-                                            FAKTORS                                                                                        ZUM           RISS  EN                   
+telefonat mit frau SPRING   KLEE    vom siebenundzwanzigsten august einundzwanzig ich erkläre frau SPRING   KLEE   dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
+                     *    SPRINKLER                                                                  *    SPRINKLE                                                                                     
+                     *    SPRINKLE                                                                   *    SPRINKLE                                                                                     
+beziehungsweise dem ungewöhnlichen äusseren  FAKTOR  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie ZU  meniskus  *   RISSEN klar geregelt IST 
+                                            FAKTOREN                                                                                       ZUM                                    IST'
+                                            FAKTORS                                                                                        ZUM          RISS   EN                     
 
 Results with file hypa
 WER: 14.3 (ins 0, del 2, sub 5 / 49)
@@ -186,12 +186,12 @@ SER: 100.0
 
 Insertions:
 
-Deletions:
-klee\t2\t2
+Deletions (second number is word count total):
+spring\t2\t2
 
-Substitutions:
-spring>sprinkler\t1\t2
-spring>sprinkle\t1\t2
+Substitutions (reference>hypothesis, second number is reference word count total):
+klee>sprinkler\t1\t2
+klee>sprinkle\t1\t2
 faktor>faktoren\t1\t1
 zu>zum\t1\t1
 ist>ist'\t1\t1
@@ -202,36 +202,30 @@ WER: 16.3 (ins 1, del 2, sub 5 / 49)
 SER: 100.0
 
 Insertions:
-en\t1
+riss\t1
 
-Deletions:
-klee\t2\t2
+Deletions (second number is word count total):
+spring\t2\t2
 
-Substitutions:
-spring>sprinkle\t2\t2
+Substitutions (reference>hypothesis, second number is reference word count total):
+klee>sprinkle\t2\t2
 faktor>faktors\t1\t1
 zu>zum\t1\t1
-rissen>riss\t1\t1
+rissen>en\t1\t1
 ---
 
 Difference between outputs:
 
 Insertions:
-en\t1
+riss\t1
 
-Deletions:
+Deletions (second number is word count total):
 
-Substitutions:
+Substitutions (reference>hypothesis, second number is reference word count total):
 sprinkler>sprinkle\t1\t1
 faktoren>faktors\t1\t1
-rissen>riss\t1\t1
+rissen>en\t1\t1
 ist'>ist\t1\t1
 """
-
+    print(output)
     assert ref == output
-
-print('Reminder: texterrors needs to be installed')
-test_levd()
-test_wer()
-test_oov_cer()
-print('Passed!')

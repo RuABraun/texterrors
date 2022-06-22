@@ -6,7 +6,7 @@ For calculating WER, CER, other metrics, getting detailed statistics and compari
 Meant to replace older tools like `sclite` by being easy to use, modify and extend.    
   
 Features:
-- Character aware (default), standard and ctm based alignment
+- Character aware, standard (default) and ctm based alignment
 - Metrics by group (for example speaker)
 - Comparing two hypothesis files to reference
 - Oracle WER
@@ -21,7 +21,7 @@ Example of colored output below (use `-c` flag). Read the white and green words 
 
 See here for [background motivation](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).  
 
-  
+
 # Installing  
 Requires minimum python 3.6!  
 ```
@@ -65,11 +65,11 @@ to get per speaker WER for example).
 
 `-oracle-wer` - Hypothesis file should have multiple entries for each utterance, oracle WER will be calculated.
   
-# Why is the WER slightly higher than in kaldi ?  
+# Why is the WER slightly higher than in kaldi if I use `-use_chardiff`?
   
-**You can make it equal by using the `-no-chardiff` argument.**  
-  
-This difference is because this tool does character aware alignment. Across a normal sized test set this should result in a small difference.   
+**You can make it equal by not using the `-use_chardiff` argument.**
+
+This difference is because this tool can do character aware alignment. Across a normal sized test set this should result in a small difference.
   
 In the below example a normal WER calculation would do a one-to-one mapping and arrive at a WER of 66.67\%.  
   
@@ -89,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 22.06.22 refactored internals to make them simpler, character aware alignment is off by default, added more explanations
 - 20.05.22 fixed bug missing regex dependency
 - 16.05.22 fixed bug causing wrong detailed output when there is utterance with empty reference, and utts with empty reference are not ignored
 - 21.04.22 insertion errors on lower line and switching colors so green is reference
