@@ -100,4 +100,4 @@ Recent changes:
 - 22.08.21 added oracle wer feature, cost matrix creation returns cost now  
 - 16.07.21 improves alignment based on ctms (much stricter now).  
 
-TODO: use cibuildwheel
+TODO: use nanobind
