@@ -232,7 +232,7 @@ ist'>ist\t1\t1
 
 def test_process_output_colored():
     reflines = ['1 den asu flash würde es sonst auch in allen drei sch- in allen drei sprachen ist der verfügbar ähm jetzt für uns habe ich gedacht reicht es ja auf deutsch he']
-    hyplines = ['1 der anzug fleisch würde sonst auch in allen drei ist in allen drei sprachen verfügbar ähm jetzt für uns habe ich gedacht reicht sie auch auf deutsch he']
+    hyplines = ['1 ah der anzug fleisch würde sonst auch in allen drei ist in allen drei sprachen verfügbar ähm jetzt für uns habe ich gedacht reicht sie auch auf deutsch he']
     refs = create_inp(reflines)
     hyps = create_inp(hyplines)
 
@@ -242,17 +242,18 @@ def test_process_output_colored():
     ref = """\"A\" is treated as reference (white and green), \"B\" as hypothesis (white and red).
 Per utt details:
 1
-\x1b[32mden\x1b[0m  \x1b[32masu\x1b[0m   \x1b[32mflash\x1b[0m  würde \x1b[32mes\x1b[0m sonst auch in allen drei \x1b[32msch-\x1b[0m in allen drei sprachen
-\x1b[31mder\x1b[0m \x1b[31manzug\x1b[0m \x1b[31mfleisch\x1b[0m                                   \x1b[31mist\x1b[0m                        
-\x1b[32mist\x1b[0m \x1b[32mder\x1b[0m verfügbar ähm jetzt für uns habe ich gedacht reicht \x1b[32mes\x1b[0m   \x1b[32mja\x1b[0m  auf deutsch
-                                                            \x1b[31msie\x1b[0m \x1b[31mauch\x1b[0m            
-he
-  
+   \x1b[32mden\x1b[0m  \x1b[32masu\x1b[0m   \x1b[32mflash\x1b[0m  würde \x1b[32mes\x1b[0m sonst auch in allen drei \x1b[32msch-\x1b[0m in allen drei
+\x1b[31mah\x1b[0m \x1b[31mder\x1b[0m \x1b[31manzug\x1b[0m \x1b[31mfleisch\x1b[0m                                   \x1b[31mist\x1b[0m               
+sprachen \x1b[32mist\x1b[0m \x1b[32mder\x1b[0m verfügbar ähm jetzt für uns habe ich gedacht reicht \x1b[32mes\x1b[0m   \x1b[32mja\x1b[0m 
+                                                                     \x1b[31msie\x1b[0m \x1b[31mauch\x1b[0m
+auf deutsch he
+              
 
-WER: 29.0 (ins 0, del 3, sub 6 / 31)
+WER: 32.3 (ins 1, del 3, sub 6 / 31)
 SER: 100.0
 
 Insertions:
+ah\t1
 
 Deletions (second number is word count total):
 es\t1\t2
@@ -267,4 +268,6 @@ sch->ist\t1\t1
 es>sie\t1\t2
 ja>auch\t1\t1
 """
+    # print(ref, file=open('ref', 'w'))
+    # print(output, file=open('output', 'w'))
     assert ref == output
