@@ -137,10 +137,10 @@ def test_process_output():
     hyps = create_inp(hyplines)
 
     buffer = io.StringIO()
-    texterrors.process_output(refs, hyps, buffer, nocolor=True)
+    texterrors.process_output(refs, hyps, buffer, ref_file='A', hyp_file='B', nocolor=True)
     output = buffer.getvalue()
 
-    ref = """First file is treated as reference, second as hypothesis. Errors are capitalized.
+    ref = """\"A\" is treated as reference, \"B\" as hypothesis. Errors are capitalized.
 Per utt details:
 1
 zum beispiel work SHOPS WO  WIR   anbieten
@@ -168,10 +168,9 @@ def test_process_output_multi():
     hypa = create_inp(hypalines)
     hypb = create_inp(hypblines)
     buffer = io.StringIO()
-    texterrors.process_multiple_outputs(refs, hypa, hypb, buffer, 10, False, False, 'hypa', 'hypb', terminal_width=203)
+    texterrors.process_multiple_outputs(refs, hypa, hypb, buffer, 10, False, False, 'ref', 'hypa', 'hypb', terminal_width=203)
     output = buffer.getvalue()
-    ref = """Per utt details:
-Order is reference, hypa, hypb
+    ref = """Per utt details, order is "ref", "hypa", "hypb":
 0
 telefonat mit frau SPRING   KLEE    vom siebenundzwanzigsten august einundzwanzig ich erkläre frau SPRING   KLEE   dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
                      *    SPRINKLER                                                                  *    SPRINKLE                                                                                     
@@ -227,5 +226,45 @@ faktoren>faktors\t1\t1
 rissen>en\t1\t1
 ist'>ist\t1\t1
 """
-    print(output)
+    # print(output)
+    assert ref == output
+
+
+def test_process_output_colored():
+    reflines = ['1 den asu flash würde es sonst auch in allen drei sch- in allen drei sprachen ist der verfügbar ähm jetzt für uns habe ich gedacht reicht es ja auf deutsch he']
+    hyplines = ['1 der anzug fleisch würde sonst auch in allen drei ist in allen drei sprachen verfügbar ähm jetzt für uns habe ich gedacht reicht sie auch auf deutsch he']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, ref_file='A', hyp_file='B', nocolor=False)
+    output = buffer.getvalue()
+    ref = """\"A\" is treated as reference (white and green), \"B\" as hypothesis (white and red).
+Per utt details:
+1
+\x1b[32mden\x1b[0m  \x1b[32masu\x1b[0m   \x1b[32mflash\x1b[0m  würde \x1b[32mes\x1b[0m sonst auch in allen drei \x1b[32msch-\x1b[0m in allen drei sprachen
+\x1b[31mder\x1b[0m \x1b[31manzug\x1b[0m \x1b[31mfleisch\x1b[0m                                   \x1b[31mist\x1b[0m                        
+\x1b[32mist\x1b[0m \x1b[32mder\x1b[0m verfügbar ähm jetzt für uns habe ich gedacht reicht \x1b[32mes\x1b[0m   \x1b[32mja\x1b[0m  auf deutsch
+                                                            \x1b[31msie\x1b[0m \x1b[31mauch\x1b[0m            
+he
+  
+
+WER: 29.0 (ins 0, del 3, sub 6 / 31)
+SER: 100.0
+
+Insertions:
+
+Deletions (second number is word count total):
+es\t1\t2
+ist\t1\t1
+der\t1\t1
+
+Substitutions (reference>hypothesis, second number is reference word count total):
+den>der\t1\t1
+asu>anzug\t1\t1
+flash>fleisch\t1\t1
+sch->ist\t1\t1
+es>sie\t1\t2
+ja>auch\t1\t1
+"""
     assert ref == output

@@ -554,7 +554,7 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width):
 
 
 def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
-                             use_chardiff, freq_sort, file_a, file_b, terminal_width=None):
+                             use_chardiff, freq_sort, ref_file, file_a, file_b, terminal_width=None):
     if terminal_width is None:
         terminal_width, _ = shutil.get_terminal_size()
         terminal_width = 120 if terminal_width >= 120 else terminal_width
@@ -571,7 +571,7 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
 
     merged_multiline = _merge_multilines(multilines_ref_hypa, multilines_ref_hypb,
                                          terminal_width)
-    fh.write(f'Per utt details:\nOrder is reference, {file_a}, {file_b}\n')
+    fh.write(f'Per utt details, order is \"{ref_file}\", \"{file_a}\", \"{file_b}\":\n')
     for utt, multiline in zip(error_stats_ref_hypa.utts, merged_multiline):
         fh.write(f'{utt}\n')
         for lines in multiline.iter_construct():
@@ -611,7 +611,7 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
                          error_stats_hypa_hypb.word_counts)
 
 
-def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set=None, debug=False,
+def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
                   freq_sort=False, nocolor=False, insert_tok='<eps>'):
@@ -638,9 +638,9 @@ def process_output(ref_utts, hyp_utts, fh, cer=False, num_top_errors=10, oov_set
 
     if not skip_detailed and not oracle_wer:
         if nocolor:
-            fh.write(f'First file is treated as reference, second as hypothesis. Errors are capitalized.\n')
+            fh.write(f'\"{ref_file}\" is treated as reference, \"{hyp_file}\" as hypothesis. Errors are capitalized.\n')
         else:
-            fh.write(f'First file is treated as reference (white and green), second as hypothesis (white and red).\n')
+            fh.write(f'\"{ref_file}\" is treated as reference (white and green), \"{hyp_file}\" as hypothesis (white and red).\n')
         fh.write(f'Per utt details:\n')
         for utt, multiline in zip(error_stats.utts, multilines):
             fh.write(f'{utt}\n')
@@ -739,7 +739,7 @@ def main(
             hyp_file, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
 
         process_output(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
-                     use_chardiff=use_chardiff, skip_detailed=skip_detailed,
+                     ref_file=ref_file, hyp_file=hyp_file, use_chardiff=use_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
                      isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors)
     else:
@@ -748,7 +748,7 @@ def main(
         hyp_uttsb = read_hyp_file(second_hyp_f, isark, False)
 
         process_multiple_outputs(ref_utts, hyp_uttsa, hyp_uttsb, fh, num_top_errors,
-                                 use_chardiff, freq_sort, hyp_file, second_hyp_f)
+                                 use_chardiff, freq_sort, ref_file, hyp_file, second_hyp_f)
 
     fh.close()
 
