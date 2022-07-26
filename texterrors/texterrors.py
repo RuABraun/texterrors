@@ -738,7 +738,7 @@ def main(
         ref_utts, hyp_utts, keywords, utt_group_map = read_files(ref_file,
             hyp_file, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
 
-        process_output(ref_utts, hyp_utts, fh, cer, debug=debug, oov_set=oov_set,
+        process_output(ref_utts, hyp_utts, fh, cer=cer, debug=debug, oov_set=oov_set,
                      ref_file=ref_file, hyp_file=hyp_file, use_chardiff=use_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
                      isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors)
