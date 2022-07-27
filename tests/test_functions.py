@@ -1,5 +1,6 @@
 """ Run command: PYTHONPATH=. pytest .
 """
+import os
 import io
 
 import Levenshtein as levd
@@ -271,3 +272,38 @@ ja>auch\t1\t1
     # print(ref, file=open('ref', 'w'))
     # print(output, file=open('output', 'w'))
     assert ref == output
+
+
+def test_cli_basic():
+    ref_f = 'testref'
+    hyp_f = 'testhyp'
+    with open(ref_f, 'w') as fh:
+        fh.write('1 zum beispiel work shops wo wir anbieten')
+    with open(hyp_f, 'w') as fh:
+        fh.write('1 zum beispiel work shop sommer anbieten')
+    outf = 'testout'
+
+    texterrors.main(ref_f, hyp_f, outf, isark=True, usecolor=False)
+    output = open(outf).read()
+    os.remove(ref_f)
+    os.remove(hyp_f)
+    os.remove(outf)
+    ref = f"""\"{ref_f}\" is treated as reference, \"{hyp_f}\" as hypothesis. Errors are capitalized.
+Per utt details:
+1
+zum beispiel work SHOPS  WO   WIR   anbieten
+                    *   SHOP SOMMER         
+
+WER: 42.9 (ins 0, del 1, sub 2 / 7)
+SER: 100.0
+
+Insertions:
+
+Deletions (second number is word count total):
+shops\t1\t1
+
+Substitutions (reference>hypothesis, second number is reference word count total):
+wo>shop\t1\t1
+wir>sommer\t1\t1
+"""
+    assert output == ref
