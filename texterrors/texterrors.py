@@ -549,6 +549,19 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width):
                 idx_b += 1
             else:
                 raise RuntimeError('Should not be possible')
+        while idx_a < len(multiline_a):
+            le_a = multiline_a[idx_a]
+            multiline.add_lineelement((*le_a.words, ''),
+                                      (*le_a.lengths, -1,),
+                                      False)
+            idx_a += 1
+        while idx_b < len(multiline_b):
+            le_b = multiline_b[idx_b]
+            multiline.add_lineelement((le_b.words[0], '', le_b.words[1]),
+                                      (le_b.lengths[0], -1, le_b.lengths[1],),
+                                      False)
+            idx_b += 1
+
         multilines.append(multiline)
     return multilines
 
@@ -615,6 +628,7 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
                   freq_sort=False, nocolor=False, insert_tok='<eps>'):
+ 
     terminal_width, _ = shutil.get_terminal_size()
     terminal_width = 120 if terminal_width >= 120 else terminal_width
 

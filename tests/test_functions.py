@@ -6,6 +6,23 @@ import io
 import Levenshtein as levd
 from texterrors import texterrors
 from dataclasses import dataclass
+import difflib
+
+
+def show_diff(text1, text2):
+    # Split the strings into lines to compare them line by line
+    lines1 = text1.splitlines()
+    lines2 = text2.splitlines()
+
+    # Create a Differ object and calculate the differences
+    differ = difflib.Differ()
+    diff = list(differ.compare(lines1, lines2))
+
+    # Optionally, you can filter out lines that haven't changed
+    diff = [line for line in diff if line[0] != ' ']
+
+    # Join the result back into a single string and return it
+    return '\n'.join(diff)
 
 
 def test_levd():
@@ -164,7 +181,7 @@ wir>sommer\t1\t1
 def test_process_output_multi():
     reflines = ['0 telefonat mit frau spring klee vom siebenundzwanzigsten august einundzwanzig ich erkläre frau spring klee dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktor wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zu meniskus rissen klar geregelt ist']
     hypalines = ['0 telefonat mit frau sprinkler vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktoren wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus rissen klar geregelt ist\'']
-    hypblines = ['0 telefonat mit frau sprinkle vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktors wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus riss en klar geregelt ist']
+    hypblines = ['0 telefonat mit frau sprinkle vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktors wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus riss en klar geregelt ist ok']
     refs = create_inp(reflines)
     hypa = create_inp(hypalines)
     hypb = create_inp(hypblines)
@@ -176,9 +193,9 @@ def test_process_output_multi():
 telefonat mit frau SPRING   KLEE    vom siebenundzwanzigsten august einundzwanzig ich erkläre frau SPRING   KLEE   dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
                      *    SPRINKLER                                                                  *    SPRINKLE                                                                                     
                      *    SPRINKLE                                                                   *    SPRINKLE                                                                                     
-beziehungsweise dem ungewöhnlichen äusseren  FAKTOR  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie ZU  meniskus  *   RISSEN klar geregelt IST 
-                                            FAKTOREN                                                                                       ZUM                                    IST'
-                                            FAKTORS                                                                                        ZUM          RISS   EN                     
+beziehungsweise dem ungewöhnlichen äusseren  FAKTOR  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie ZU  meniskus  *   RISSEN klar geregelt IST  * 
+                                            FAKTOREN                                                                                       ZUM                                    IST'   
+                                            FAKTORS                                                                                        ZUM          RISS   EN                      OK
 
 Results with file hypa
 WER: 14.3 (ins 0, del 2, sub 5 / 49)
@@ -198,11 +215,12 @@ ist>ist'\t1\t1
 ---
 
 Results with file hypb
-WER: 16.3 (ins 1, del 2, sub 5 / 49)
+WER: 18.4 (ins 2, del 2, sub 5 / 49)
 SER: 100.0
 
 Insertions:
 riss\t1
+ok\t1
 
 Deletions (second number is word count total):
 spring\t2\t2
@@ -218,6 +236,7 @@ Difference between outputs:
 
 Insertions:
 riss\t1
+ist\t1
 
 Deletions (second number is word count total):
 
@@ -225,10 +244,10 @@ Substitutions (reference>hypothesis, second number is reference word count total
 sprinkler>sprinkle\t1\t1
 faktoren>faktors\t1\t1
 rissen>en\t1\t1
-ist'>ist\t1\t1
+ist'>ok\t1\t1
 """
-    # print(output)
-    assert ref == output
+    #print(output)
+    assert ref == output, show_diff(ref, output)
 
 
 def test_process_output_colored():
