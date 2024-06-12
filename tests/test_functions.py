@@ -288,8 +288,8 @@ sch->ist\t1\t1
 es>sie\t1\t2
 ja>auch\t1\t1
 """
-    # print(ref, file=open('ref', 'w'))
-    # print(output, file=open('output', 'w'))
+    print(ref, file=open('ref', 'w'))
+    print(output, file=open('output', 'w'))
     assert ref == output
 
 
