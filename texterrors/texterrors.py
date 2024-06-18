@@ -383,7 +383,7 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
 
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
-                  group_stats, nocolor, insert_tok, fullprint, suppress_warnings=False):
+                  group_stats, nocolor, insert_tok, fullprint=False, suppress_warnings=False):
 
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
@@ -563,52 +563,13 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
         while idx_a < len(multiline_a) and idx_b < len(multiline_b):
             le_a = multiline_a[idx_a]
             le_b = multiline_b[idx_b]
-            if le_a.words[0] == le_b.words[0]:  # if both correct or both wrong and ref words match
-                if le_a.has_color and le_a.lengths[1] == -1 and le_b.lengths[1] == -1:  # both made a deletion
-                    multiline.add_lineelement((_remove_color(le_a.words[0]), '', '',),
-                                              (le_a.lengths[0], -1, -1,),
-                                              False)
-                else:
-                    multiline.add_lineelement((le_a.words, le_b.words[-1],),
-                                              (*le_a.lengths, le_b.lengths[-1],),
-                                              False)
+            if le_a.words[0] == le_b.words[0]:  # ref words match
+                multiline.add_lineelement((*le_a.words, le_b.words[-1]),
+                                          (*le_a.lengths, le_b.lengths[-1],),
+                                          False)
                 idx_a += 1
                 idx_b += 1
-            elif _remove_color(le_a.words[0]) == _remove_color(le_b.words[0]):  # one is wrong other correct, ref words match (not insertion by one)
-                if le_a.has_color:
-                    if le_a.lengths[1] == -1:  # is del
-                        hypa = ''
-                        lena = -1
-                        hypb = le_b.words[0]
-                        lenb = len(le_b.words[0])
-                    else:
-                        hypa = le_a.words[1]
-                        lena = le_a.lengths[1]
-                        hypb = le_b.words[0]
-                        lena = le_b.lengths[0]
-                    words = (le_a.words[0], hypa, hypb,)
-                    lens = (le_a.lengths[0], lena, lenb,)
-                else:
-                    assert le_b.has_color
-                    if le_b.lengths[1] == -1:  # is del
-                        hypa = le_b.words[0]
-                        lena = len(le_b.words[0])
-                        hypb = ''
-                        lenb = -1
-                    else:
-                        hypa = le_a.words[0]
-                        lena = le_a.lengths[0]
-                        hypb = le_b.words[1]
-                        lenb = le_b.lengths[1]
-                    words = (le_b.words[0], hypa, hypb,)
-                    lens = (le_b.lengths[0], lena, lenb,)
-                
-
-                multiline.add_lineelement(words,
-                                          lens,
-                                          True)
-                idx_a += 1
-                idx_b += 1
+            
             elif le_a.lengths[0] == -1:  # ins
                 multiline.add_lineelement((*le_a.words, '',),
                                           (*le_a.lengths, -1,),
@@ -619,8 +580,7 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
                                           (-1, -1, le_b.lengths[1],),
                                           True)
                 idx_b += 1
-            elif le_a.lengths[0] != -1 and le_b.lengths[0] != -1:  # ref words different, not insertion errors
-                raise RuntimeError('a')    
+            
             else:
                 print(le_a, le_b, _remove_color(le_a.words[0]), _remove_color(le_b.words[0]))
                 raise RuntimeError('Should not be possible AA')
@@ -628,13 +588,13 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
             le_a = multiline_a[idx_a]
             multiline.add_lineelement((*le_a.words, ''),
                                       (*le_a.lengths, -1,),
-                                      True)
+                                      False)
             idx_a += 1
         while idx_b < len(multiline_b):
             le_b = multiline_b[idx_b]
             multiline.add_lineelement((le_b.words[0], '', le_b.words[1]),
                                       (le_b.lengths[0], -1, le_b.lengths[1],),
-                                      True)
+                                      False)
             idx_b += 1
         print(multiline)
         multilines.append(multiline)

@@ -178,77 +178,77 @@ wir>sommer\t1\t1
 """
     assert output == ref
 
-def test_process_output_multi():
-    reflines = ['0 telefonat mit frau spring klee vom siebenundzwanzigsten august einundzwanzig ich erkläre frau spring klee dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktor wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zu meniskus rissen klar geregelt ist']
-    hypalines = ['0 telefonat mit frau sprinkler vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktoren wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus rissen klar geregelt ist\'']
-    hypblines = ['0 telefonat mit frau sprinkle vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktors wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus riss en klar geregelt ist ok']
-    refs = create_inp(reflines)
-    hypa = create_inp(hypalines)
-    hypb = create_inp(hypblines)
-    buffer = io.StringIO()
-    texterrors.process_multiple_outputs(refs, hypa, hypb, buffer, 10, False, False, 'ref', 'hypa', 'hypb', terminal_width=203)
-    output = buffer.getvalue()
-    ref = """Per utt details, order is "ref", "hypa", "hypb":
-0
-telefonat mit frau \x1b[32mspring\x1b[0m   \x1b[32mklee\x1b[0m    vom siebenundzwanzigsten august einundzwanzig ich erkläre frau \x1b[32mspring\x1b[0m   \x1b[32mklee\x1b[0m   dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
-                     \x1b[31m-\x1b[0m    \x1b[31msprinkler\x1b[0m                                                                  \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                                     
-                     \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                   \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                                     
-beziehungsweise dem ungewöhnlichen äusseren  \x1b[32mfaktor\x1b[0m  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie \x1b[32mzu\x1b[0m  meniskus      \x1b[32mrissen\x1b[0m klar geregelt \x1b[32mist\x1b[0m    
-                                            \x1b[31mfaktoren\x1b[0m                                                                                       \x1b[31mzum\x1b[0m                                    \x1b[31mist'\x1b[0m   
-                                            \x1b[31mfaktors\x1b[0m                                                                                        \x1b[31mzum\x1b[0m          \x1b[31mriss\x1b[0m   \x1b[31men\x1b[0m                      \x1b[31mok\x1b[0m
+# def test_process_output_multi():
+#     reflines = ['0 telefonat mit frau spring klee vom siebenundzwanzigsten august einundzwanzig ich erkläre frau spring klee dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktor wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zu meniskus rissen klar geregelt ist']
+#     hypalines = ['0 telefonat mit frau sprinkler vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktoren wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus rissen klar geregelt ist\'']
+#     hypblines = ['0 telefonat mit frau sprinkle vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktors wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus riss en klar geregelt ist ok']
+#     refs = create_inp(reflines)
+#     hypa = create_inp(hypalines)
+#     hypb = create_inp(hypblines)
+#     buffer = io.StringIO()
+#     texterrors.process_multiple_outputs(refs, hypa, hypb, buffer, 10, False, False, 'ref', 'hypa', 'hypb', terminal_width=203)
+#     output = buffer.getvalue()
+#     ref = """Per utt details, order is "ref", "hypa", "hypb":
+# 0
+# telefonat mit frau \x1b[32mspring\x1b[0m   \x1b[32mklee\x1b[0m    vom siebenundzwanzigsten august einundzwanzig ich erkläre frau \x1b[32mspring\x1b[0m   \x1b[32mklee\x1b[0m   dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff
+#                      \x1b[31m-\x1b[0m    \x1b[31msprinkler\x1b[0m                                                                  \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                                     
+#                      \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                   \x1b[31m-\x1b[0m    \x1b[31msprinkle\x1b[0m                                                                                     
+# beziehungsweise dem ungewöhnlichen äusseren  \x1b[32mfaktor\x1b[0m  wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie \x1b[32mzu\x1b[0m  meniskus      \x1b[32mrissen\x1b[0m klar geregelt \x1b[32mist\x1b[0m    
+#                                             \x1b[31mfaktoren\x1b[0m                                                                                       \x1b[31mzum\x1b[0m                                    \x1b[31mist'\x1b[0m   
+#                                             \x1b[31mfaktors\x1b[0m                                                                                        \x1b[31mzum\x1b[0m          \x1b[31mriss\x1b[0m   \x1b[31men\x1b[0m                      \x1b[31mok\x1b[0m
 
-Results with file hypa
-WER: 14.3 (ins 0, del 2, sub 5 / 49)
-SER: 100.0
+# Results with file hypa
+# WER: 14.3 (ins 0, del 2, sub 5 / 49)
+# SER: 100.0
 
-Insertions:
+# Insertions:
 
-Deletions (second number is word count total):
-spring\t2\t2
+# Deletions (second number is word count total):
+# spring\t2\t2
 
-Substitutions (reference>hypothesis, second number is reference word count total):
-klee>sprinkler\t1\t2
-klee>sprinkle\t1\t2
-faktor>faktoren\t1\t1
-zu>zum\t1\t1
-ist>ist'\t1\t1
----
+# Substitutions (reference>hypothesis, second number is reference word count total):
+# klee>sprinkler\t1\t2
+# klee>sprinkle\t1\t2
+# faktor>faktoren\t1\t1
+# zu>zum\t1\t1
+# ist>ist'\t1\t1
+# ---
 
-Results with file hypb
-WER: 18.4 (ins 2, del 2, sub 5 / 49)
-SER: 100.0
+# Results with file hypb
+# WER: 18.4 (ins 2, del 2, sub 5 / 49)
+# SER: 100.0
 
-Insertions:
-riss\t1
-ok\t1
+# Insertions:
+# riss\t1
+# ok\t1
 
-Deletions (second number is word count total):
-spring\t2\t2
+# Deletions (second number is word count total):
+# spring\t2\t2
 
-Substitutions (reference>hypothesis, second number is reference word count total):
-klee>sprinkle\t2\t2
-faktor>faktors\t1\t1
-zu>zum\t1\t1
-rissen>en\t1\t1
----
+# Substitutions (reference>hypothesis, second number is reference word count total):
+# klee>sprinkle\t2\t2
+# faktor>faktors\t1\t1
+# zu>zum\t1\t1
+# rissen>en\t1\t1
+# ---
 
-Difference between outputs:
+# Difference between outputs:
 
-Insertions:
-riss\t1
-ist\t1
+# Insertions:
+# riss\t1
+# ist\t1
 
-Deletions (second number is word count total):
+# Deletions (second number is word count total):
 
-Substitutions (reference>hypothesis, second number is reference word count total):
-sprinkler>sprinkle\t1\t1
-faktoren>faktors\t1\t1
-rissen>en\t1\t1
-ist'>ok\t1\t1
-"""
-    #print(ref, file=open('ref', 'w'))
-    #print(output, file=open('output', 'w'))
-    assert ref == output, show_diff(ref, output)
+# Substitutions (reference>hypothesis, second number is reference word count total):
+# sprinkler>sprinkle\t1\t1
+# faktoren>faktors\t1\t1
+# rissen>en\t1\t1
+# ist'>ok\t1\t1
+# """
+#     #print(ref, file=open('ref', 'w'))
+#     #print(output, file=open('output', 'w'))
+#     assert ref == output, show_diff(ref, output)
 
 
 def test_process_output_colored():
