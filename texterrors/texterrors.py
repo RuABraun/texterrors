@@ -287,6 +287,12 @@ class MultiLine:
             joined_lines.append(' '.join(line))
         return joined_lines
 
+    def __repr__(self):
+        elems = []
+        for le in self.line_elements:
+            elems.append('|'.join(w for w in le.words) + ' ' + ','.join(str(n) for n in le.lengths))
+        return '\t'.join(elems)
+
     def iter_construct(self):
         index = 0
         lines = [[] for _ in range(self.num_lines)]
@@ -301,11 +307,11 @@ class MultiLine:
                 yield joined_lines
                 written_len = 0
             written_len += padded_len + 1  # +1 because space will be added
-            pad_len_plus_color = padded_len + 9 if le.has_color else padded_len
             words = le.words
             for i, line in enumerate(lines):
-                wordlen = pad_len_plus_color if lengths[i] != -1 else padded_len
-                line.append(f'{words[i]:^{wordlen}}')
+                word = words[i]
+                wordlen = padded_len + 9 if _has_color(word) else padded_len
+                line.append(f'{word:^{wordlen}}')
 
             index += 1
         joined_lines = self.construct(*lines)
@@ -377,8 +383,8 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
 
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
-                  group_stats, nocolor, insert_tok, suppress_warnings=False):
-    print('NOCOLOR', nocolor)
+                  group_stats, nocolor, insert_tok, fullprint, suppress_warnings=False):
+
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
     multilines = []
@@ -429,20 +435,28 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
             if ref_w == hyp_w:
                 if hyp_w in keywords:
                     error_stats.keywords_predicted += 1
-                double_line.add_lineelement((ref_w, '',),
-                                            (len(ref_w), -1),
-                                            False)
+                if not fullprint:
+                    double_line.add_lineelement((ref_w, '',),
+                                                (len(ref_w), -1),
+                                                False)
+                else:
+                    double_line.add_lineelement((ref_w, ref_w,),
+                                                (len(ref_w), len(ref_w)),
+                                                False)
                 error_stats.word_counts[ref_w] += 1
                 ref_word_count += 1
             else:
-                breakpoint()
                 error_count += 1
                 if ref_w in oov_set:
                     error_stats.oov_word_error += 1
                 if ref_w == '<eps>':
-                    if not nocolor:
-                        double_line.add_lineelement(('', colored(hyp_w, 'red'),),
-                                                    (-1, len(hyp_w),),
+                    if fullprint:
+                        double_line.add_lineelement(('', hyp_w,),
+                                                    (-1, len(hyp_w)),
+                                                    False)
+                    elif not nocolor:
+                        double_line.add_lineelement(('', colored(hyp_w, 'red', force_color=True)),
+                                                    (-1, len(hyp_w)),
                                                     True)
                     else:
                         hyp_w_upper = hyp_w.upper()
@@ -451,8 +465,12 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                                                     False)
                     error_stats.ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
-                    if not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'green'), '',),
+                    if fullprint:
+                        double_line.add_lineelement((ref_w, '',),
+                                                    (len(ref_w), -1,),
+                                                    False)
+                    elif not nocolor:
+                        double_line.add_lineelement((colored(ref_w, 'green', force_color=True), '',),
                                                     (len(ref_w), -1,),
                                                     True)
                     else:
@@ -466,8 +484,12 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                 else:
                     ref_word_count += 1
                     key = f'{ref_w}>{hyp_w}'
-                    if not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'green'), colored(hyp_w, 'red'),),
+                    if fullprint:
+                        double_line.add_lineelement((ref_w, hyp_w,),
+                                                    (len(ref_w), len(hyp_w),),
+                                                    False)
+                    elif not nocolor:
+                        double_line.add_lineelement((colored(ref_w, 'green', force_color=True), colored(hyp_w, 'red', force_color=True),),
                                                     (len(ref_w), len(hyp_w),),
                                                     True)
                     else:
@@ -478,7 +500,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                                                     False)
                     error_stats.subs[key] += 1
                     error_stats.word_counts[ref_w] += 1
-                breakpoint()
+                #breakpoint()
         error_stats.total_count += ref_word_count
         #breakpoint()
         if not skip_detailed:
@@ -522,11 +544,19 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
 
 
 def _remove_color(word):
-    return re.sub(br'\x1b\[[0-9]{2}m(\p{L}+)\x1b\[0m', br'\1', word.encode()).decode()
+    return re.sub(br'\x1b\[[0-9]{2}m([\p{L}\p{P}]+)\x1b\[0m', br'\1', word.encode()).decode()
+
+
+def _has_color(word):
+    return word.startswith('\x1b')
 
 
 def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
     multilines = []
+    print(multilines_a)
+    print()
+    print(multilines_b)
+    print()
     for multiline_a, multiline_b in zip(multilines_a, multilines_b):
         multiline = MultiLine(terminal_width, 3)
         idx_a, idx_b = 0, 0
@@ -534,31 +564,44 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
             le_a = multiline_a[idx_a]
             le_b = multiline_b[idx_b]
             if le_a.words[0] == le_b.words[0]:  # if both correct or both wrong and ref words match
-                multiline.add_lineelement((*le_a.words, le_b.words[-1],),
-                                          (*le_a.lengths, le_b.lengths[-1],),
-                                          le_a.has_color)
+                if le_a.has_color and le_a.lengths[1] == -1 and le_b.lengths[1] == -1:  # both made a deletion
+                    multiline.add_lineelement((_remove_color(le_a.words[0]), '', '',),
+                                              (le_a.lengths[0], -1, -1,),
+                                              False)
+                else:
+                    multiline.add_lineelement((le_a.words, le_b.words[-1],),
+                                              (*le_a.lengths, le_b.lengths[-1],),
+                                              False)
                 idx_a += 1
                 idx_b += 1
             elif _remove_color(le_a.words[0]) == _remove_color(le_b.words[0]):  # one is wrong other correct, ref words match (not insertion by one)
                 if le_a.has_color:
                     if le_a.lengths[1] == -1:  # is del
-                        hypa = colored('*', 'red')
-                        lena = 1
+                        hypa = ''
+                        lena = -1
+                        hypb = le_b.words[0]
+                        lenb = len(le_b.words[0])
                     else:
                         hypa = le_a.words[1]
                         lena = le_a.lengths[1]
-                    words = (le_a.words[0], hypa, le_b.words[1],)
-                    lens = (le_a.lengths[0], lena, le_b.lengths[-1],)
+                        hypb = le_b.words[0]
+                        lena = le_b.lengths[0]
+                    words = (le_a.words[0], hypa, hypb,)
+                    lens = (le_a.lengths[0], lena, lenb,)
                 else:
                     assert le_b.has_color
                     if le_b.lengths[1] == -1:  # is del
-                        hypb = colored('*', 'red')
-                        lenb = 1
+                        hypa = le_b.words[0]
+                        lena = len(le_b.words[0])
+                        hypb = ''
+                        lenb = -1
                     else:
+                        hypa = le_a.words[0]
+                        lena = le_a.lengths[0]
                         hypb = le_b.words[1]
                         lenb = le_b.lengths[1]
-                    words = (le_b.words[0], le_a.words[1], hypb,)
-                    lens = (le_b.lengths[0], le_a.lengths[1], lenb,)
+                    words = (le_b.words[0], hypa, hypb,)
+                    lens = (le_b.lengths[0], lena, lenb,)
                 
 
                 multiline.add_lineelement(words,
@@ -566,16 +609,18 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
                                           True)
                 idx_a += 1
                 idx_b += 1
-            elif le_a.lengths[0] == -1:
+            elif le_a.lengths[0] == -1:  # ins
                 multiline.add_lineelement((*le_a.words, '',),
                                           (*le_a.lengths, -1,),
                                           True)
                 idx_a += 1
-            elif le_b.lengths[0] == -1:
+            elif le_b.lengths[0] == -1:  # ins
                 multiline.add_lineelement(('', '', le_b.words[1],),
                                           (-1, -1, le_b.lengths[1],),
                                           True)
                 idx_b += 1
+            elif le_a.lengths[0] != -1 and le_b.lengths[0] != -1:  # ref words different, not insertion errors
+                raise RuntimeError('a')    
             else:
                 print(le_a, le_b, _remove_color(le_a.words[0]), _remove_color(le_b.words[0]))
                 raise RuntimeError('Should not be possible AA')
@@ -591,7 +636,7 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
                                       (le_b.lengths[0], -1, le_b.lengths[1],),
                                       True)
             idx_b += 1
-
+        print(multiline)
         multilines.append(multiline)
     return multilines
 
@@ -604,10 +649,10 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
 
     multilines_ref_hypa, error_stats_ref_hypa = process_lines(ref_utts, hypa_utts, False, use_chardiff, False,
                                             False, terminal_width, False, [], [], False,
-                                            None, None, nocolor=False, insert_tok='<eps>')
+                                            None, None, nocolor=False, insert_tok='<eps>',fullprint=True)
     multilines_ref_hypb, error_stats_ref_hypb = process_lines(ref_utts, hypb_utts, False, use_chardiff, False,
                                                               False, terminal_width, False, [], [], False,
-                                                              None, None, nocolor=False, insert_tok='<eps>')
+                                                              None, None, nocolor=False, insert_tok='<eps>', fullprint=True)
     _, error_stats_hypa_hypb = process_lines(hypa_utts, hypb_utts, False, use_chardiff, False,
                                                               True, terminal_width, False, [], [], False,
                                                               None, None, nocolor=True, insert_tok='<eps>')
