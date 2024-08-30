@@ -4,7 +4,7 @@ import os
 import setuptools
 import sys
 
-__version__ = "0.5.1"
+__version__ = "1.0.0"
 
 
 class get_pybind_include(object):
@@ -24,11 +24,12 @@ class get_pybind_include(object):
 ext_modules = [
     Extension(
         "texterrors_align",
-        ["libs/texterrors_align.cc"],
+        ["libs/texterrors_align.cc", "libs/stringvector.cc"],
         include_dirs=[
             # Path to pybind11 headers
             get_pybind_include(),
             get_pybind_include(user=True),
+            "libs/",
         ],
         language="c++",
     )
@@ -51,16 +52,13 @@ def has_flag(compiler, flagname):
 
 
 def cpp_flag(compiler):
-    """Return the -std=c++[11/14] compiler flag.
-    The c++14 is prefered over c++11 (when it is available).
+    """Return the -std=c++17 compiler flag.
     """
-    if has_flag(compiler, "-std=c++14"):
-        return "-std=c++14"
-    elif has_flag(compiler, "-std=c++11"):
-        return "-std=c++11"
+    if has_flag(compiler, "-std=c++17"):
+        return "-std=c++17"
     else:
         raise RuntimeError(
-            "Unsupported compiler -- at least C++11 support " "is needed!"
+            "Unsupported compiler -- at least C++17 support " "is needed!"
         )
 
 

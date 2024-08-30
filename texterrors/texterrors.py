@@ -10,6 +10,7 @@ import numpy as np
 import plac
 import regex as re
 import texterrors_align
+from texterrors_align import StringVector
 from loguru import logger
 from termcolor import colored
 
@@ -41,6 +42,7 @@ def lev_distance(a, b):
 
 def seq_distance(a, b):
     """ This function is for when a and b have strings as elements (variable length). """
+    assert isinstance(a, StringVector) and isinstance(b, StringVector), 'Input types should be of type StringVector!'
     len_a = len(a)
     len_b = len(b)
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
@@ -135,11 +137,7 @@ def align_texts_ctm(text_a_str, text_b_str, times_a, times_b, durs_a, durs_b, de
 
 def align_texts(text_a, text_b, debug, insert_tok='<eps>', use_chardiff=True):
 
-    assert isinstance(text_a, list) and isinstance(text_b, list), 'Input types should be a list!'
-    if len(text_a) > 0:
-        assert isinstance(text_a[0], str)
-    if len(text_b) > 0:
-        assert isinstance(text_b[0], str)
+    assert isinstance(text_a, StringVector) and isinstance(text_b, StringVector), 'Input types should be of type StringVector!'
 
     aligned_a, aligned_b, cost = _align_texts(text_a, text_b, use_chardiff,
                                               debug=debug, insert_tok=insert_tok)
@@ -196,7 +194,7 @@ def get_oov_cer(ref_aligned, hyp_aligned, oov_set):
 @dataclass
 class Utt:
     uid: str
-    words: list
+    words: StringVector
     times: list = None
     durs: list = None
 
@@ -211,11 +209,11 @@ def read_ref_file(ref_f, isark):
             if isark:
                 utt, *words = line.split()
                 assert utt not in ref_utts, 'There are repeated utterances in reference file! Exiting'
-                ref_utts[utt] = Utt(utt, words)
+                ref_utts[utt] = Utt(utt, StringVector(words))
             else:
                 words = line.split()
                 i = str(i)
-                ref_utts[i] = Utt(i, words)
+                ref_utts[i] = Utt(i, StringVector(words))
     return ref_utts
 
 
@@ -227,13 +225,13 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
                 utt, *words = line.split()
                 words = [w for w in words if w != OOV_SYM]
                 if not oracle_wer:
-                    hyp_utts[utt] = Utt(utt, words)
+                    hyp_utts[utt] = Utt(utt, StringVector(words))
                 else:
-                    hyp_utts[utt].append(Utt(utt, words))
+                    hyp_utts[utt].append(Utt(utt, StringVector(words)))
             else:
                 words = line.split()
                 i = str(i)
-                hyp_utts[i] = Utt(i, [w for w in words if w != OOV_SYM])
+                hyp_utts[i] = Utt(i, StringVector([w for w in words if w != OOV_SYM]))
     return hyp_utts
 
 
@@ -253,7 +251,7 @@ def read_ctm_file(f):
         durs = []
         for e in wordtimes:
             words.append(e[0]), times.append(e[1]), durs.append([2])
-        utts[utt] = Utt(utt, words, times, durs)
+        utts[utt] = Utt(utt, StringVector(words), times, durs)
     return utt_to_wordtimes
 
 

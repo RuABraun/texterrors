@@ -111,13 +111,12 @@ int lev_distance_str(std::string a, std::string b) {
 
 enum direction{diag, move_left, up};
 
-std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, std::vector<std::string> texta,
-                   std::vector<std::string> textb, bool use_chardiff) {
+std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
+                  const StringVector& words_a,
+                  const StringVector& words_b, const bool use_chardiff) {
   auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
   int32_t numr = array.shape()[0], numc = array.shape()[1];
-
-  if (numr > 32000 || numc > 32000) throw std::runtime_error("Input sequences are too large!");
 
   std::vector<std::tuple<int, int> > bestpath;
   int i = numr - 1, j = numc - 1;
@@ -133,8 +132,8 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
       upc = cost_mat[(i-1) * numc + j];
       leftc = cost_mat[i * numc + j - 1];
       diagc = cost_mat[(i-1) * numc + j - 1];
-      std::string& a = texta[i-1];
-      std::string& b = textb[j-1];
+      const std::string_view a = words_a[i-1];
+      const std::string_view b = words_b[j-1];
       double up_trans_cost = 1.0;
       double left_trans_cost = 1.0;
       double diag_trans_cost;
@@ -258,13 +257,13 @@ void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::v
 
 
 
-int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
-                         std::vector<std::string>& textb, bool use_chardist) {
+int calc_sum_cost(py::array_t<double> array, const StringVector& words_a,
+                  const StringVector& words_b, const bool use_chardist) {
   if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
 
   int M1 = array.shape()[0], N1 = array.shape()[1];
-  if (M1 - 1 != texta.size() || N1 - 1 != textb.size()) throw std::runtime_error("Sizes do not match!");
+  if (M1 - 1 != words_a.Size() || N1 - 1 != words_b.Size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
   double* ptr = (double*) buf.ptr;
   ptr[0] = 0;
@@ -274,12 +273,12 @@ int calc_sum_cost(py::array_t<double> array, std::vector<std::string>& texta,
     for(int32 j = 1; j < N1; j++) {
       double transition_cost;
       if (use_chardist) {
-        std::string& a = texta[i-1];
-        std::string& b = textb[j-1];
+        const std::string_view a = words_a[i-1];
+        const std::string_view b = words_b[j-1];
         transition_cost = levdistance(a.data(), b.data(), 
           a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
       } else {
-        transition_cost = texta[i-1] == textb[j-1] ? 0. : 1.;
+        transition_cost = words_a[i-1] == words_b[j-1] ? 0. : 1.;
       }
 
       double upc = ptr[(i-1) * N1 + j] + 1.;

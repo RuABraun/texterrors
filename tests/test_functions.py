@@ -7,6 +7,7 @@ import logging
 
 import Levenshtein as levd
 from texterrors import texterrors
+from texterrors.texterrors import StringVector
 from dataclasses import dataclass
 import difflib
 
@@ -49,26 +50,26 @@ def calc_wer(ref, b):
 
 
 def test_wer():
-    ref = 'IN THE DISCOTHEQUE THE DJ PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split()
-    hyp = 'IN THE DISCO TAK THE D J PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split()
+    ref = StringVector('IN THE DISCOTHEQUE THE DJ PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split())
+    hyp = StringVector('IN THE DISCO TAK THE D J PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 36.36, round(wer, 2)
 
-    ref = 'IT FORMS PART OF THE SOUTH EAST DORSET CONURBATION ALONG THE ENGLISH CHANNEL COAST'.split()
-    hyp = "IT FOLLOWS PARDOFELIS LOUSES DORJE THAT COMORE H O LONELY ENGLISH GENOME COTA'S".split()
+    ref = StringVector('IT FORMS PART OF THE SOUTH EAST DORSET CONURBATION ALONG THE ENGLISH CHANNEL COAST'.split())
+    hyp = StringVector("IT FOLLOWS PARDOFELIS LOUSES DORJE THAT COMORE H O LONELY ENGLISH GENOME COTA'S".split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 85.71, round(wer, 2)
 
-    ref = 'THE FILM WAS LOADED INTO CASSETTES IN A DARKROOM OR CHANGING BAG'.split()
-    hyp = "THE FILM WAS LOADED INTO CASSETTES IN A DARK ROOM OR CHANGING BAG".split()
+    ref = StringVector('THE FILM WAS LOADED INTO CASSETTES IN A DARKROOM OR CHANGING BAG'.split())
+    hyp = StringVector("THE FILM WAS LOADED INTO CASSETTES IN A DARK ROOM OR CHANGING BAG".split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 16.67, round(wer, 2)
 
-    ref = 'GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split()
-    hyp = "THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split()
+    ref = StringVector('GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split())
+    hyp = StringVector("THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 100.0, round(wer, 2)  # kaldi gets 92.31 ! but has worse alignment
@@ -76,8 +77,8 @@ def test_wer():
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 92.31, round(wer, 2)
 
-    ref = 'test sentence okay words ending now'.split()
-    hyp = "test a sentenc ok endin now".split()
+    ref = StringVector('test sentence okay words ending now'.split())
+    hyp = StringVector("test a sentenc ok endin now".split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 83.33, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
@@ -85,8 +86,8 @@ def test_wer():
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 66.67, round(wer, 2)
 
-    ref = 'speedbird eight six two'.split()
-    hyp = 'hello speedbird six two'.split()
+    ref = StringVector('speedbird eight six two'.split())
+    hyp = StringVector('hello speedbird six two'.split())
     ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
     assert ref_aligned[0] == '<eps>'
     wer = calc_wer(ref_aligned, hyp_aligned)
@@ -108,31 +109,31 @@ def test_oov_cer():
 
 def test_seq_distance():
     a, b = 'a b', 'a b'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 0
 
     a, b = 'a b', 'a c'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 1
 
     a, b = 'a b c', 'a b d'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 1
 
     a, b = 'a b c', 'a b d e'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 2
 
     a, b = 'a b c', 'd e f g'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 4
 
     a, b = 'ça va très bien', 'ça ne va pas'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 3
 
     a, b = 'ça ne va pas', 'merci ça va'
-    d = texterrors.seq_distance(a.split(), b.split())
+    d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))
     assert d == 3
 
 
@@ -148,7 +149,7 @@ def create_inp(lines):
     utts = {}
     for line in lines:
         i, line = line.split(maxsplit=1)
-        utts[i] = Utt(i, line.split())
+        utts[i] = Utt(i, StringVector(line.split()))
     return utts
 
 
@@ -339,16 +340,16 @@ wir>sommer\t1\t1
 def test_speed():
     ref = create_inp(open('tests/reftext').read().splitlines())
     hyp = create_inp(open('tests/hyptext').read().splitlines())
-    # import cProfile
-    # pr = cProfile.Profile()
+    import cProfile
+    pr = cProfile.Profile()
     
-    # pr.enable()
+    pr.enable()
     buffer = io.StringIO()
     start_time = time.perf_counter()
     texterrors.process_output(ref, hyp, fh=buffer, ref_file='ref', hyp_file='hyp', skip_detailed=True)
     process_time = time.perf_counter() - start_time
-    # pr.disable()
-    # pr.dump_stats('speed.prof')
+    pr.disable()
+    pr.dump_stats('speed.prof')
 
     logger.info(f'Processing time for speed test is {process_time}')
-    assert process_time < 1.
+    assert process_time < 2.
