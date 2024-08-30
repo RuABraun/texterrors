@@ -260,8 +260,6 @@ def read_ctm_file(f):
 @dataclass
 class LineElement:
     words: Tuple[str]
-    lengths: Tuple[int]
-    has_color: bool
 
 
 class MultiLine:
@@ -270,9 +268,8 @@ class MultiLine:
         self.terminal_width = terminal_width
         self.num_lines = num_lines
 
-    def add_lineelement(self, words, lengths, has_color):
-        le = LineElement(words, lengths, has_color)
-        self.line_elements.append(le)
+    def add_lineelement(self, *words):
+        self.line_elements.append(words)
 
     def __len__(self):
         return len(self.line_elements)
@@ -290,7 +287,7 @@ class MultiLine:
     def __repr__(self):
         elems = []
         for le in self.line_elements:
-            elems.append('|'.join(w for w in le.words) + ' ' + ','.join(str(n) for n in le.lengths))
+            elems.append('|'.join(w for w in le))
         return '\t'.join(elems)
 
     def iter_construct(self):
@@ -299,7 +296,7 @@ class MultiLine:
         written_len = 0
         while index < len(self.line_elements):
             le = self.line_elements[index]
-            lengths = le.lengths
+            lengths = [len(_remove_color(w)) for w in le]
             padded_len = max(*lengths)
             if written_len + padded_len > self.terminal_width:
                 joined_lines = self.construct(*lines)
@@ -307,10 +304,11 @@ class MultiLine:
                 yield joined_lines
                 written_len = 0
             written_len += padded_len + 1  # +1 because space will be added
-            words = le.words
+            words = le
             for i, line in enumerate(lines):
                 word = words[i]
-                wordlen = padded_len + 9 if _has_color(word) else padded_len
+                wordlen = padded_len
+                wordlen += get_color_lengthoffset(word)
                 line.append(f'{word:^{wordlen}}')
 
             index += 1
@@ -436,13 +434,9 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                 if hyp_w in keywords:
                     error_stats.keywords_predicted += 1
                 if not fullprint:
-                    double_line.add_lineelement((ref_w, '',),
-                                                (len(ref_w), -1),
-                                                False)
+                    double_line.add_lineelement(ref_w, '')
                 else:
-                    double_line.add_lineelement((ref_w, ref_w,),
-                                                (len(ref_w), len(ref_w)),
-                                                False)
+                    double_line.add_lineelement(ref_w, ref_w)
                 error_stats.word_counts[ref_w] += 1
                 ref_word_count += 1
             else:
@@ -451,33 +445,21 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     error_stats.oov_word_error += 1
                 if ref_w == '<eps>':
                     if fullprint:
-                        double_line.add_lineelement(('', hyp_w,),
-                                                    (-1, len(hyp_w)),
-                                                    False)
+                        double_line.add_lineelement('', hyp_w)
                     elif not nocolor:
-                        double_line.add_lineelement(('', colored(hyp_w, 'red', force_color=True)),
-                                                    (-1, len(hyp_w)),
-                                                    True)
+                        double_line.add_lineelement('', colored(hyp_w, 'red', force_color=True))
                     else:
                         hyp_w_upper = hyp_w.upper()
-                        double_line.add_lineelement(('*', hyp_w_upper,),
-                                                    (1, len(hyp_w_upper)),
-                                                    False)
+                        double_line.add_lineelement('*', hyp_w_upper)
                     error_stats.ins[hyp_w] += 1
                 elif hyp_w == '<eps>':
                     if fullprint:
-                        double_line.add_lineelement((ref_w, '',),
-                                                    (len(ref_w), -1,),
-                                                    False)
+                        double_line.add_lineelement(ref_w, '')
                     elif not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'green', force_color=True), '',),
-                                                    (len(ref_w), -1,),
-                                                    True)
+                        double_line.add_lineelement(colored(ref_w, 'green', force_color=True), '')
                     else:
                         ref_w_upper = ref_w.upper()
-                        double_line.add_lineelement((ref_w_upper, '*',),
-                                                    (len(ref_w_upper), 1,),
-                                                    False)
+                        double_line.add_lineelement(ref_w_upper, '*')
                     ref_word_count += 1
                     error_stats.dels[ref_w] += 1
                     error_stats.word_counts[ref_w] += 1
@@ -485,19 +467,13 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     ref_word_count += 1
                     key = f'{ref_w}>{hyp_w}'
                     if fullprint:
-                        double_line.add_lineelement((ref_w, hyp_w,),
-                                                    (len(ref_w), len(hyp_w),),
-                                                    False)
+                        double_line.add_lineelement(ref_w, hyp_w,)
                     elif not nocolor:
-                        double_line.add_lineelement((colored(ref_w, 'green', force_color=True), colored(hyp_w, 'red', force_color=True),),
-                                                    (len(ref_w), len(hyp_w),),
-                                                    True)
+                        double_line.add_lineelement(colored(ref_w, 'green', force_color=True), colored(hyp_w, 'red', force_color=True))
                     else:
                         ref_w_upper = ref_w.upper()
                         hyp_w_upper = hyp_w.upper()
-                        double_line.add_lineelement((ref_w_upper, hyp_w_upper,),
-                                                    (len(ref_w_upper), len(hyp_w_upper),),
-                                                    False)
+                        double_line.add_lineelement(ref_w_upper, hyp_w_upper)
                     error_stats.subs[key] += 1
                     error_stats.word_counts[ref_w] += 1
                 #breakpoint()
@@ -547,62 +523,82 @@ def _remove_color(word):
     return re.sub(br'\x1b\[[0-9]{2}m([\p{L}\p{P}]+)\x1b\[0m', br'\1', word.encode()).decode()
 
 
-def _has_color(word):
-    return word.startswith('\x1b')
+def get_color_lengthoffset(word):
+    if word.count('\x1b') == 2:
+        return 9
+    if word.count('\x1b') == 4:
+        return 18
+    return 0
 
 
 def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
     multilines = []
-    print(multilines_a)
-    print()
-    print(multilines_b)
-    print()
+    # print(multilines_a)
+    # print()
+    # print(multilines_b)
+    # print()
     for multiline_a, multiline_b in zip(multilines_a, multilines_b):
         multiline = MultiLine(terminal_width, 3)
         idx_a, idx_b = 0, 0
         while idx_a < len(multiline_a) and idx_b < len(multiline_b):
             le_a = multiline_a[idx_a]
             le_b = multiline_b[idx_b]
-            if le_a.words[0] == le_b.words[0]:  # ref words match
-                multiline.add_lineelement((*le_a.words, le_b.words[-1]),
-                                          (*le_a.lengths, le_b.lengths[-1],),
-                                          False)
+            hyp_worda = le_a[1]
+            hyp_wordb = le_b[1]
+            
+            if le_a[0] == le_b[0]:  # ref words match
+                refword = le_a[0]
+                if refword == hyp_worda and refword == hyp_wordb:  # everything correct
+                    multiline.add_lineelement(refword, hyp_worda, hyp_wordb)
+                elif not refword:  # double insertion
+                    if usecolor:
+                        hyp_worda = colored(hyp_worda, 'red', force_color=True)
+                        hyp_wordb = colored(hyp_wordb, 'red', force_color=True)
+                    
+                    multiline.add_lineelement('', hyp_worda, hyp_wordb)
+                else:  # hyp1 and/or hyp2 are wrong
+                    if usecolor:
+                        if refword != hyp_worda and hyp_worda:
+                            hyp_worda = colored(hyp_worda, 'red', force_color=True)
+
+                        if refword != hyp_wordb and hyp_wordb:
+                            hyp_wordb = colored(hyp_wordb, 'red', force_color=True)
+                        refword = colored(refword, 'green', force_color=True)
+
+                    multiline.add_lineelement(refword, hyp_worda, hyp_wordb)
                 idx_a += 1
                 idx_b += 1
-            
-            elif le_a.lengths[0] == -1:  # ins
-                multiline.add_lineelement((*le_a.words, '',),
-                                          (*le_a.lengths, -1,),
-                                          True)
+            elif not le_a[0]:  # ins
+                if usecolor:
+                    hyp_worda = colored(hyp_worda, 'red', force_color=True)
+                multiline.add_lineelement('', hyp_worda, '')
                 idx_a += 1
-            elif le_b.lengths[0] == -1:  # ins
-                multiline.add_lineelement(('', '', le_b.words[1],),
-                                          (-1, -1, le_b.lengths[1],),
-                                          True)
+            elif not le_b[0]:  # ins
+                if usecolor:
+                    hyp_wordb = colored(hyp_wordb, 'red', force_color=True)
+                multiline.add_lineelement('', '', hyp_wordb)
                 idx_b += 1
             
             else:
                 print(le_a, le_b, _remove_color(le_a.words[0]), _remove_color(le_b.words[0]))
                 raise RuntimeError('Should not be possible AA')
         while idx_a < len(multiline_a):
+            assert idx_b == len(multiline_b)
             le_a = multiline_a[idx_a]
-            multiline.add_lineelement((*le_a.words, ''),
-                                      (*le_a.lengths, -1,),
-                                      False)
+            multiline.add_lineelement(le_a[0], colored(le_a[1], 'red', force_color=True), '')
             idx_a += 1
         while idx_b < len(multiline_b):
+            assert idx_a == len(multiline_a)
             le_b = multiline_b[idx_b]
-            multiline.add_lineelement((le_b.words[0], '', le_b.words[1]),
-                                      (le_b.lengths[0], -1, le_b.lengths[1],),
-                                      False)
+            multiline.add_lineelement(le_b[0], '', colored(le_b[1], 'red', force_color=True))
             idx_b += 1
-        print(multiline)
+        #print(multiline)
         multilines.append(multiline)
     return multilines
 
 
 def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
-                             use_chardiff, freq_sort, ref_file, file_a, file_b, terminal_width=None):
+                             use_chardiff, freq_sort, ref_file, file_a, file_b, terminal_width=None, usecolor=False):
     if terminal_width is None:
         terminal_width, _ = shutil.get_terminal_size()
         terminal_width = 120 if terminal_width >= 120 else terminal_width
@@ -618,7 +614,7 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
                                                               None, None, nocolor=True, insert_tok='<eps>')
 
     merged_multiline = _merge_multilines(multilines_ref_hypa, multilines_ref_hypb,
-                                         terminal_width, True)
+                                         terminal_width, usecolor)
     fh.write(f'Per utt details, order is \"{ref_file}\", \"{file_a}\", \"{file_b}\":\n')
     for utt, multiline in zip(error_stats_ref_hypa.utts, merged_multiline):
         fh.write(f'{utt}\n')
@@ -797,7 +793,7 @@ def main(
         hyp_uttsb = read_hyp_file(second_hyp_f, isark, False)
 
         process_multiple_outputs(ref_utts, hyp_uttsa, hyp_uttsb, fh, num_top_errors,
-                                 use_chardiff, freq_sort, ref_file, hyp_file, second_hyp_f)
+                                 use_chardiff, freq_sort, ref_file, hyp_file, second_hyp_f, usecolor=usecolor)
 
     fh.close()
 

@@ -5,6 +5,7 @@
 #include <queue>
 #include <iostream>
 #include <math.h>
+#include "stringvector.h"
 
 
 namespace py = pybind11;
@@ -108,7 +109,7 @@ int lev_distance_str(std::string a, std::string b) {
   return levdistance(a.data(), b.data(), a.size(), b.size());
 }
 
-enum direction{diag, left, up};
+enum direction{diag, move_left, up};
 
 std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, std::vector<std::string> texta,
                    std::vector<std::string> textb, bool use_chardiff) {
@@ -124,7 +125,7 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
     double upc, leftc, diagc;
     direction direc;
     if (i == 0) {
-      direc = left;
+      direc = move_left;
     } else if (j == 0) {
       direc = up;
     } else {
@@ -149,7 +150,7 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
       } else if (isclose(upc + up_trans_cost, current_cost)) {
         direc = up;
       } else if (isclose(leftc + left_trans_cost, current_cost)) {
-        direc = left;
+        direc = move_left;
       } else {
         std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<std::endl;
         std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;
@@ -161,7 +162,7 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
     if (direc == up) {
       i--;
       bestpath.emplace_back(i, -1);  // -1 means null token
-    } else if (direc == left) {
+    } else if (direc == move_left) {
       j--;
       bestpath.emplace_back(-1, j);
     } else if (direc == diag) {
@@ -356,6 +357,10 @@ int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta
   return ptr[(M-1) * N + N - 1];
 }
 
+
+void init_stringvector(py::module_ &m);
+
+
 PYBIND11_MODULE(texterrors_align,m) {
   m.doc() = "pybind11 plugin";
   m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
@@ -365,4 +370,5 @@ PYBIND11_MODULE(texterrors_align,m) {
   m.def("lev_distance", lev_distance<int>);
   m.def("lev_distance", lev_distance<char>);
   m.def("lev_distance_str", &lev_distance_str);
+  init_stringvector(m);
 }
