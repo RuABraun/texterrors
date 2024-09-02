@@ -55,6 +55,13 @@ const std::string_view StringVector::next() {
     return (*this)[current_index_++];
 }
 
+std::string StringVector::Str() const {
+    std::string repr = "";
+    for (int i = 0; i < Size(); i++) {
+        repr += std::string{(*this)[i]} + " ";
+    }
+    return repr;
+}
 
 StringVector::~StringVector() {}
 
@@ -66,5 +73,6 @@ void init_stringvector(py::module &m) {
         .def("__len__", &StringVector::Size)
         .def("__getitem__", &StringVector::operator[])
         .def("__iter__", &StringVector::iter)
-        .def("__next__", &StringVector::next);
+        .def("__next__", &StringVector::next)
+        .def("__str__", &StringVector::Str);
 }

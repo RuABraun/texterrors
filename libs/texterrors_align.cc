@@ -27,6 +27,56 @@ struct Pair {
     int16_t j;
 };
 
+
+int calc_edit_distance_fast(int32* cost_mat, const char* a, const char* b,
+                     const int32 M, const int32 N) {
+  int row_length = N+1;
+  // std::cout << "STARTING M="<< M<< " N="<<N<<std::endl;
+  for (int32 i = 0; i <= M; ++i) {
+    for (int32 j = 0; j <= N; ++j) {
+
+      if (i == 0 && j == 0) {
+        cost_mat[0] = 0;
+        continue;
+      }
+      if (i == 0) {
+        cost_mat[j] = cost_mat[j - 1] + 1;
+        continue;
+      }
+      if (j == 0) {
+        cost_mat[row_length] = cost_mat[0] + 1;
+        continue;
+      }
+      int32 transition_cost = a[i-1] == b[j-1] ? 0 : 1;
+
+      int32 upc = cost_mat[j] + 1;
+      int32 leftc = cost_mat[row_length + j - 1] + 1;
+      int32 diagc = cost_mat[j - 1] + transition_cost;
+      int32 cost = std::min(upc, std::min(leftc, diagc) );
+
+      cost_mat[row_length + j] = cost;
+      cost_mat[j - 1] = cost_mat[row_length + j - 1];  // copying result up after use
+    }
+    if (i > 0) {
+      cost_mat[N] = cost_mat[row_length + N];
+    }
+
+    // std::cout << "row "<<i;
+    // for (int32 j = 0; j <= N; ++j) {
+    //   std::cout << " "<<cost_mat[j];
+    // }
+    // std::cout << std::endl;
+  }
+  // std::cout << "last row";
+  // for (int32 j = 0; j <= N; ++j) {
+  //   std::cout <<" "<<cost_mat[row_length + j];
+  // }
+  // std::cout << std::endl;
+
+  return cost_mat[row_length - 1];
+}
+
+
 template <class T>
 void create_lev_cost_mat(int32* cost_mat, const T* a, const T* b,
                      const int32 M, const int32 N) {
@@ -109,6 +159,11 @@ int lev_distance_str(std::string a, std::string b) {
   return levdistance(a.data(), b.data(), a.size(), b.size());
 }
 
+int calc_edit_distance_fast_str(std::string a, std::string b) {
+  std::vector<int> buffer(a.size() + b.size() + 2);
+  return calc_edit_distance_fast(buffer.data(), a.data(), b.data(), a.size(), b.size());
+}
+
 enum direction{diag, move_left, up};
 
 std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
@@ -117,6 +172,10 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array,
   auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
   int32_t numr = array.shape()[0], numc = array.shape()[1];
+  std::vector<int32> char_dist_buffer;
+  if (use_chardiff) {
+    char_dist_buffer.resize(100);
+  }
 
   std::vector<std::tuple<int, int> > bestpath;
   int i = numr - 1, j = numc - 1;
@@ -138,8 +197,13 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array,
       double left_trans_cost = 1.0;
       double diag_trans_cost;
       if (use_chardiff) {
+        int alen = a.size();
+        int blen = b.size();
+        if (alen >= 50 || blen >= 50) {
+          throw std::runtime_error("Word is too long! Increase buffer");
+        }
         diag_trans_cost =
-          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+          calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
       } else {
         diag_trans_cost = a == b ? 0. : 1.;
       }
@@ -266,6 +330,12 @@ int calc_sum_cost(py::array_t<double> array, const StringVector& words_a,
   if (M1 - 1 != words_a.Size() || N1 - 1 != words_b.Size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
   double* ptr = (double*) buf.ptr;
+
+  std::vector<int32> char_dist_buffer;
+  if (use_chardist) {
+    char_dist_buffer.resize(100);
+  }
+
   ptr[0] = 0;
   for (int32 i = 1; i < M1; i++) ptr[i*N1] = ptr[(i-1)*N1] + 1;
   for (int32 j = 1; j < N1; j++) ptr[j] = ptr[j-1] + 1;
@@ -275,8 +345,13 @@ int calc_sum_cost(py::array_t<double> array, const StringVector& words_a,
       if (use_chardist) {
         const std::string_view a = words_a[i-1];
         const std::string_view b = words_b[j-1];
-        transition_cost = levdistance(a.data(), b.data(), 
-          a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        int alen = a.size();
+        int blen = b.size();
+        if (alen >= 50 || blen >= 50) {
+          throw std::runtime_error("Word is too long! Increase buffer");
+        }
+        transition_cost = calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) 
+          / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
       } else {
         transition_cost = words_a[i-1] == words_b[j-1] ? 0. : 1.;
       }
@@ -369,5 +444,6 @@ PYBIND11_MODULE(texterrors_align,m) {
   m.def("lev_distance", lev_distance<int>);
   m.def("lev_distance", lev_distance<char>);
   m.def("lev_distance_str", &lev_distance_str);
+  m.def("calc_edit_distance_fast_str", &calc_edit_distance_fast_str);
   init_stringvector(m);
 }

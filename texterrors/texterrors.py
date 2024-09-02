@@ -40,6 +40,10 @@ def lev_distance(a, b):
         return texterrors_align.lev_distance(a, b)
 
 
+def calc_edit_distance_fast(a, b):
+    return texterrors_align.calc_edit_distance_fast_str(a, b)
+
+
 def seq_distance(a, b):
     """ This function is for when a and b have strings as elements (variable length). """
     assert isinstance(a, StringVector) and isinstance(b, StringVector), 'Input types should be of type StringVector!'
@@ -53,6 +57,10 @@ def seq_distance(a, b):
 def _align_texts(words_a, words_b, use_chardiff, debug, insert_tok): 
     summed_cost = np.zeros((len(words_a) + 1, len(words_b) + 1), dtype=np.float64, 
         order="C")
+    
+    if debug:
+        print(words_a)
+        print(words_b)
     cost = texterrors_align.calc_sum_cost(summed_cost, words_a, words_b, use_chardiff)
 
     if debug:
@@ -656,10 +664,11 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
 def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
-                  freq_sort=False, nocolor=False, insert_tok='<eps>'):
+                  freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None):
  
-    terminal_width, _ = shutil.get_terminal_size()
-    terminal_width = 120 if terminal_width >= 120 else terminal_width
+    if terminal_width is None:
+        terminal_width, _ = shutil.get_terminal_size()
+        terminal_width = 120 if terminal_width >= 120 else terminal_width
 
     if oov_set is None:
         oov_set = set()

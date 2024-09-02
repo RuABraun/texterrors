@@ -20,6 +20,7 @@ public:
     const std::string_view operator[](const int i) const;
     StringVector iter();
     const std::string_view next();
+    std::string Str() const;
 
     std::string data_;
     std::vector<int> wordend_index_;

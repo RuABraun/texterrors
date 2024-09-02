@@ -3,7 +3,8 @@
 import os
 import io
 import time
-import logging
+import sys
+from loguru import logger
 
 import Levenshtein as levd
 from texterrors import texterrors
@@ -11,8 +12,8 @@ from texterrors.texterrors import StringVector
 from dataclasses import dataclass
 import difflib
 
-
-logger = logging.getLogger(__name__)
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 def show_diff(text1, text2):
     # Split the strings into lines to compare them line by line
@@ -36,6 +37,14 @@ def test_levd():
         d1 = texterrors.lev_distance(a, b)
         d2 = levd.distance(a, b)
         assert d1 == d2, f'{a} {b} {d1} {d2}'
+
+
+# def test_calc_edit_distance_fast():
+#     pairs = ['a', '', '', 'a', 'MOZILLA', 'MUSIAL', 'ARE', 'MOZILLA', 'TURNIPS', 'TENTH', 'POSTERS', 'POSTURE']
+#     for a, b in zip(pairs[:-1:2], pairs[1::2]):
+#         d1 = texterrors.calc_edit_distance_fast(a, b)
+#         d2 = levd.distance(a, b)
+#         assert d1 == d2, f'{a} {b} fasteditdist={d1} ref={d2}'
 
 
 def calc_wer(ref, b):
@@ -266,7 +275,7 @@ def test_process_output_colored():
     hyps = create_inp(hyplines)
 
     buffer = io.StringIO()
-    texterrors.process_output(refs, hyps, buffer, ref_file='A', hyp_file='B', nocolor=False)
+    texterrors.process_output(refs, hyps, buffer, ref_file='A', hyp_file='B', nocolor=False, terminal_width=80)
     output = buffer.getvalue()
     ref = """\"A\" is treated as reference (white and green), \"B\" as hypothesis (white and red).
 Per utt details:
@@ -297,8 +306,8 @@ sch->ist\t1\t1
 es>sie\t1\t2
 ja>auch\t1\t1
 """
-    #print(ref, file=open('ref', 'w'))
-    #print(output, file=open('output', 'w'))
+    print(ref, file=open('ref', 'w'))
+    print(output, file=open('output', 'w'))
     assert ref == output
 
 
@@ -340,16 +349,17 @@ wir>sommer\t1\t1
 def test_speed():
     ref = create_inp(open('tests/reftext').read().splitlines())
     hyp = create_inp(open('tests/hyptext').read().splitlines())
-    import cProfile
-    pr = cProfile.Profile()
+    # import cProfile
+    # pr = cProfile.Profile()
     
-    pr.enable()
+    # pr.enable()
     buffer = io.StringIO()
     start_time = time.perf_counter()
-    texterrors.process_output(ref, hyp, fh=buffer, ref_file='ref', hyp_file='hyp', skip_detailed=True)
+    texterrors.process_output(ref, hyp, fh=buffer, ref_file='ref', hyp_file='hyp', 
+                              skip_detailed=True, use_chardiff=True, debug=False)
     process_time = time.perf_counter() - start_time
-    pr.disable()
-    pr.dump_stats('speed.prof')
+    # pr.disable()
+    # pr.dump_stats('speed.prof')
 
     logger.info(f'Processing time for speed test is {process_time}')
     assert process_time < 2.
