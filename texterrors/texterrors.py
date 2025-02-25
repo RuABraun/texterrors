@@ -15,6 +15,7 @@ from loguru import logger
 from termcolor import colored
 
 OOV_SYM = '<unk>'
+CPP_WORDS_CONTAINER = True
 
 
 def convert_to_int(lst_a, lst_b, dct):
@@ -50,7 +51,7 @@ def seq_distance(a, b):
     len_a = len(a)
     len_b = len(b)
     summed_cost = np.zeros((len_a + 1, len_b + 1), dtype=np.float64, order="C")
-    cost = texterrors_align.calc_sum_cost(summed_cost, a, b, False)
+    cost = texterrors_align.calc_sum_cost(summed_cost, a, b, False, True)
     return cost
 
 
@@ -61,14 +62,21 @@ def _align_texts(words_a, words_b, use_chardiff, debug, insert_tok):
     if debug:
         print(words_a)
         print(words_b)
-    cost = texterrors_align.calc_sum_cost(summed_cost, words_a, words_b, use_chardiff)
+    if CPP_WORDS_CONTAINER:
+        cost = texterrors_align.calc_sum_cost(summed_cost, words_a, words_b, use_chardiff, True)
+    else:
+        cost = texterrors_align.calc_sum_cost_lists(summed_cost, words_a, words_b, use_chardiff, True)
 
     if debug:
         np.set_printoptions(linewidth=300)
         np.savetxt('summedcost', summed_cost, fmt='%.3f', delimiter='\t')
 
-    best_path_reversed = texterrors_align.get_best_path(summed_cost, 
-        words_a, words_b, use_chardiff)
+    if CPP_WORDS_CONTAINER:
+        best_path_reversed = texterrors_align.get_best_path(summed_cost, 
+            words_a, words_b, use_chardiff, True)
+    else:
+        best_path_reversed = texterrors_align.get_best_path_lists(summed_cost, 
+            words_a, words_b, use_chardiff, True)
 
     aligned_a, aligned_b = [], []
     for i, j in reversed(best_path_reversed):
@@ -217,11 +225,15 @@ def read_ref_file(ref_f, isark):
             if isark:
                 utt, *words = line.split()
                 assert utt not in ref_utts, 'There are repeated utterances in reference file! Exiting'
-                ref_utts[utt] = Utt(utt, StringVector(words))
+                if CPP_WORDS_CONTAINER:
+                    words = StringVector(words)
+                ref_utts[utt] = Utt(utt, words)
             else:
                 words = line.split()
                 i = str(i)
-                ref_utts[i] = Utt(i, StringVector(words))
+                if CPP_WORDS_CONTAINER:
+                    words = StringVector(words)
+                ref_utts[i] = Utt(i, words)
     return ref_utts
 
 
@@ -232,14 +244,19 @@ def read_hyp_file(hyp_f, isark, oracle_wer):
             if isark:
                 utt, *words = line.split()
                 words = [w for w in words if w != OOV_SYM]
+                if CPP_WORDS_CONTAINER:
+                    words = StringVector(words)
                 if not oracle_wer:
-                    hyp_utts[utt] = Utt(utt, StringVector(words))
+                    hyp_utts[utt] = Utt(utt, words)
                 else:
-                    hyp_utts[utt].append(Utt(utt, StringVector(words)))
+                    hyp_utts[utt].append(Utt(utt, words))
             else:
                 words = line.split()
                 i = str(i)
-                hyp_utts[i] = Utt(i, StringVector([w for w in words if w != OOV_SYM]))
+                words = [w for w in words if w != OOV_SYM]
+                if CPP_WORDS_CONTAINER:
+                    words = StringVector(words)
+                hyp_utts[i] = Utt(i, words)
     return hyp_utts
 
 

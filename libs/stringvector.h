@@ -16,7 +16,7 @@ public:
     StringVector(const vector<std::string>& words);
     ~StringVector();
 
-    const int Size() const;
+    const int size() const;
     const std::string_view operator[](const int i) const;
     StringVector iter();
     const std::string_view next();

@@ -27,12 +27,12 @@ StringVector::StringVector(const vector<std::string>& words) {
     current_index_ = 0;
 }
 
-const int StringVector::Size() const {
+const int StringVector::size() const {
     return wordend_index_.size();
 }
 
 const std::string_view StringVector::operator[](const int i) const {
-    if (i < 0 || i >= Size()) {
+    if (i < 0 || i >= size()) {
         throw std::runtime_error("Invalid index");
     }
     int start_index = 0;
@@ -49,7 +49,7 @@ StringVector StringVector::iter() {
 }
 
 const std::string_view StringVector::next() {
-    if (current_index_ == Size()) {
+    if (current_index_ == size()) {
         throw pybind11::stop_iteration();
     }
     return (*this)[current_index_++];
@@ -57,7 +57,7 @@ const std::string_view StringVector::next() {
 
 std::string StringVector::Str() const {
     std::string repr = "";
-    for (int i = 0; i < Size(); i++) {
+    for (int i = 0; i < size(); i++) {
         repr += std::string{(*this)[i]} + " ";
     }
     return repr;
@@ -69,8 +69,8 @@ StringVector::~StringVector() {}
 void init_stringvector(py::module &m) {
     py::class_<StringVector>(m, "StringVector")
         .def(py::init<const py::list&>())
-        .def("size", &StringVector::Size)
-        .def("__len__", &StringVector::Size)
+        .def("size", &StringVector::size)
+        .def("__len__", &StringVector::size)
         .def("__getitem__", &StringVector::operator[])
         .def("__iter__", &StringVector::iter)
         .def("__next__", &StringVector::next)

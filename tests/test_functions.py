@@ -11,6 +11,7 @@ from texterrors import texterrors
 from texterrors.texterrors import StringVector
 from dataclasses import dataclass
 import difflib
+from loguru import logger
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
@@ -347,19 +348,25 @@ wir>sommer\t1\t1
 
 
 def test_speed():
-    ref = create_inp(open('tests/reftext').read().splitlines())
-    hyp = create_inp(open('tests/hyptext').read().splitlines())
-    # import cProfile
-    # pr = cProfile.Profile()
+    import time
+    import sys
+    logger.remove()
+    logger.add(sys.stdout, level='INFO')
+    ref = create_inp(open('test-other.ark').read().splitlines())
+    hyp = create_inp(open('test-other-mod.ark').read().splitlines())
+    import cProfile
+    pr = cProfile.Profile()
     
-    # pr.enable()
+    pr.enable()
     buffer = io.StringIO()
     start_time = time.perf_counter()
     texterrors.process_output(ref, hyp, fh=buffer, ref_file='ref', hyp_file='hyp', 
                               skip_detailed=True, use_chardiff=True, debug=False)
     process_time = time.perf_counter() - start_time
-    # pr.disable()
-    # pr.dump_stats('speed.prof')
+
+    pr.disable()
+    pr.dump_stats('speed.prof')
 
     logger.info(f'Processing time for speed test is {process_time}')
     assert process_time < 2.
+

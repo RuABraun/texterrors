@@ -168,7 +168,7 @@ enum direction{diag, move_left, up};
 
 std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array, 
                   const StringVector& words_a,
-                  const StringVector& words_b, const bool use_chardiff) {
+                  const StringVector& words_b, const bool use_chardiff, const bool use_fast_edit_distance=true) {
   auto buf = array.request();
   double* cost_mat = (double*) buf.ptr;
   int32_t numr = array.shape()[0], numc = array.shape()[1];
@@ -202,8 +202,89 @@ std::vector<std::tuple<int32, int32> > get_best_path(py::array_t<double> array,
         if (alen >= 50 || blen >= 50) {
           throw std::runtime_error("Word is too long! Increase buffer");
         }
-        diag_trans_cost =
+        if (use_fast_edit_distance) {
+          diag_trans_cost =
           calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        } else {
+          diag_trans_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        }
+      } else {
+        diag_trans_cost = a == b ? 0. : 1.;
+      }
+
+      if (isclose(diagc + diag_trans_cost, current_cost)) {
+        direc = diag;
+      } else if (isclose(upc + up_trans_cost, current_cost)) {
+        direc = up;
+      } else if (isclose(leftc + left_trans_cost, current_cost)) {
+        direc = move_left;
+      } else {
+        std::cout << a <<" "<<b<<" "<<i<<" "<<j<<" trans "<<diag_trans_cost<<" "<<left_trans_cost<<" "<<up_trans_cost<<" costs "<<current_cost<<" "<<diagc<<" "<<leftc<<" "<<upc <<std::endl;
+        std::cout << (diag_trans_cost + diagc == current_cost) <<std::endl;
+        std::cout << diag_trans_cost + diagc <<" "<<current_cost <<std::endl;
+        throw std::runtime_error("Should not be possible !");
+      }
+    }
+
+    if (direc == up) {
+      i--;
+      bestpath.emplace_back(i, -1);  // -1 means null token
+    } else if (direc == move_left) {
+      j--;
+      bestpath.emplace_back(-1, j);
+    } else if (direc == diag) {
+      i--, j--;
+      bestpath.emplace_back(i, j);
+    }
+  }
+  return bestpath;
+}
+
+
+std::vector<std::tuple<int32, int32> > get_best_path_lists(py::array_t<double> array, 
+                  const std::vector<std::string>& words_a,
+                  const std::vector<std::string>& words_b, const bool use_chardiff, const bool use_fast_edit_distance=true) {
+  auto buf = array.request();
+  double* cost_mat = (double*) buf.ptr;
+  int32_t numr = array.shape()[0], numc = array.shape()[1];
+  std::vector<int32> char_dist_buffer;
+  if (use_chardiff) {
+    char_dist_buffer.resize(100);
+  }
+
+  std::vector<std::tuple<int, int> > bestpath;
+  int i = numr - 1, j = numc - 1;
+  while (i != 0 || j != 0) {
+    double upc, leftc, diagc;
+    direction direc;
+    if (i == 0) {
+      direc = move_left;
+    } else if (j == 0) {
+      direc = up;
+    } else {
+      float current_cost = cost_mat[i * numc + j];
+      upc = cost_mat[(i-1) * numc + j];
+      leftc = cost_mat[i * numc + j - 1];
+      diagc = cost_mat[(i-1) * numc + j - 1];
+      const std::string& a = words_a[i-1];
+      const std::string& b = words_b[j-1];
+      double up_trans_cost = 1.0;
+      double left_trans_cost = 1.0;
+      double diag_trans_cost;
+      if (use_chardiff) {
+        int alen = a.size();
+        int blen = b.size();
+        if (alen >= 50 || blen >= 50) {
+          throw std::runtime_error("Word is too long! Increase buffer");
+        }
+        if (use_fast_edit_distance) {
+          diag_trans_cost =
+          calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        } else {
+          diag_trans_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        }
       } else {
         diag_trans_cost = a == b ? 0. : 1.;
       }
@@ -322,12 +403,12 @@ void get_best_path_ctm(py::array_t<double> array, py::list& bestpath_lst, std::v
 
 
 int calc_sum_cost(py::array_t<double> array, const StringVector& words_a,
-                  const StringVector& words_b, const bool use_chardist) {
+                  const StringVector& words_b, const bool use_chardist, const bool use_fast_edit_distance=true) {
   if ( array.ndim() != 2 )
     throw std::runtime_error("Input should be 2-D NumPy array");
 
   int M1 = array.shape()[0], N1 = array.shape()[1];
-  if (M1 - 1 != words_a.Size() || N1 - 1 != words_b.Size()) throw std::runtime_error("Sizes do not match!");
+  if (M1 - 1 != words_a.size() || N1 - 1 != words_b.size()) throw std::runtime_error("Sizes do not match!");
   auto buf = array.request();
   double* ptr = (double*) buf.ptr;
 
@@ -350,8 +431,65 @@ int calc_sum_cost(py::array_t<double> array, const StringVector& words_a,
         if (alen >= 50 || blen >= 50) {
           throw std::runtime_error("Word is too long! Increase buffer");
         }
-        transition_cost = calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) 
-          / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        if (use_fast_edit_distance) {
+          transition_cost =
+          calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        } else {
+          transition_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        }
+      } else {
+        transition_cost = words_a[i-1] == words_b[j-1] ? 0. : 1.;
+      }
+
+      double upc = ptr[(i-1) * N1 + j] + 1.;
+      double leftc = ptr[i * N1 + j - 1] + 1.;
+      double diagc = ptr[(i-1) * N1 + j - 1] + transition_cost;
+      double sum = std::min(upc, std::min(leftc, diagc));
+      ptr[i * N1 + j] = sum;
+    }
+  }
+  return ptr[M1*N1 - 1];
+}
+
+
+
+int calc_sum_cost_lists(py::array_t<double> array, const std::vector<std::string>& words_a,
+                  const std::vector<std::string>& words_b, const bool use_chardist, const bool use_fast_edit_distance=true) {
+  if ( array.ndim() != 2 )
+    throw std::runtime_error("Input should be 2-D NumPy array");
+
+  int M1 = array.shape()[0], N1 = array.shape()[1];
+  if (M1 - 1 != words_a.size() || N1 - 1 != words_b.size()) throw std::runtime_error("Sizes do not match!");
+  auto buf = array.request();
+  double* ptr = (double*) buf.ptr;
+
+  std::vector<int32> char_dist_buffer;
+  if (use_chardist) {
+    char_dist_buffer.resize(100);
+  }
+
+  ptr[0] = 0;
+  for (int32 i = 1; i < M1; i++) ptr[i*N1] = ptr[(i-1)*N1] + 1;
+  for (int32 j = 1; j < N1; j++) ptr[j] = ptr[j-1] + 1;
+  for(int32 i = 1; i < M1; i++) {
+    for(int32 j = 1; j < N1; j++) {
+      double transition_cost;
+      if (use_chardist) {
+        const std::string& a = words_a[i-1];
+        const std::string& b = words_b[j-1];
+        int alen = a.size();
+        int blen = b.size();
+        if (alen >= 50 || blen >= 50) {
+          throw std::runtime_error("Word is too long! Increase buffer");
+        }
+        if (use_fast_edit_distance) {
+          transition_cost =
+          calc_edit_distance_fast(char_dist_buffer.data(), a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        } else {
+          transition_cost =
+          levdistance(a.data(), b.data(), a.size(), b.size()) / static_cast<double>(std::max(a.size(), b.size())) * 1.5;
+        }
       } else {
         transition_cost = words_a[i-1] == words_b[j-1] ? 0. : 1.;
       }
@@ -374,7 +512,7 @@ int calc_sum_cost_ctm(py::array_t<double> array, std::vector<std::string>& texta
     throw std::runtime_error("Input should be 2-D NumPy array");
 
   int M = array.shape()[0], N = array.shape()[1];
-  if (M != texta.size() || N != textb.size()) throw std::runtime_error("Sizes do not match!");
+  if (M != texta.size() || N != textb.size()) throw std::runtime_error("  s do not match!");
   auto buf = array.request();
   double* ptr = (double*) buf.ptr;
 //  std::cout << "STARTING"<<std::endl;
@@ -438,9 +576,11 @@ void init_stringvector(py::module_ &m);
 PYBIND11_MODULE(texterrors_align,m) {
   m.doc() = "pybind11 plugin";
   m.def("calc_sum_cost", &calc_sum_cost, "Calculate summed cost matrix");
+  m.def("calc_sum_cost_lists", &calc_sum_cost_lists, "Calculate summed cost matrix");
   m.def("calc_sum_cost_ctm", &calc_sum_cost_ctm, "Calculate summed cost matrix");
   m.def("get_best_path", &get_best_path, "get_best_path");
   m.def("get_best_path_ctm", &get_best_path_ctm, "get_best_path_ctm");
+  m.def("get_best_path_lists", &get_best_path_lists, "get_best_path_lists");
   m.def("lev_distance", lev_distance<int>);
   m.def("lev_distance", lev_distance<char>);
   m.def("lev_distance_str", &lev_distance_str);
