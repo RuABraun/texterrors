@@ -603,8 +603,18 @@ def _merge_multilines(multilines_a, multilines_b, terminal_width, usecolor):
                 idx_b += 1
             
             else:
-                print(le_a, le_b, _remove_color(le_a.words[0]), _remove_color(le_b.words[0]))
-                raise RuntimeError('Should not be possible AA')
+                logger.warning('Weird case!! found please report')
+                refword = le_a[0] + '|' + le_b[0]
+                if usecolor:
+                    refword = colored(refword, 'green', force_color=True)
+                    if le_a[0] != hyp_worda:
+                        hyp_worda = colored(hyp_worda, 'red', force_color=True)
+                    if le_b[0] != hyp_wordb:
+                        hyp_wordb = colored(hyp_wordb, 'red', force_color=True)
+                multiline.add_lineelement(refword, hyp_worda, hyp_wordb)
+                idx_a += 1
+                idx_b += 1
+
         while idx_a < len(multiline_a):
             assert idx_b == len(multiline_b)
             le_a = multiline_a[idx_a]

@@ -354,18 +354,18 @@ def test_speed():
     logger.add(sys.stdout, level='INFO')
     ref = create_inp(open('tests/reftext').read().splitlines())
     hyp = create_inp(open('tests/hyptext').read().splitlines())
-    import cProfile
-    pr = cProfile.Profile()
+    # import cProfile
+    # pr = cProfile.Profile()
+    # pr.enable()
     
-    pr.enable()
     buffer = io.StringIO()
     start_time = time.perf_counter()
     texterrors.process_output(ref, hyp, fh=buffer, ref_file='ref', hyp_file='hyp', 
                               skip_detailed=True, use_chardiff=True, debug=False)
     process_time = time.perf_counter() - start_time
 
-    pr.disable()
-    pr.dump_stats('speed.prof')
+    # pr.disable()
+    # pr.dump_stats('speed.prof')
 
     logger.info(f'Processing time for speed test is {process_time}')
     assert process_time < 2.
