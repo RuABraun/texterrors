@@ -36,9 +36,9 @@ jobs:
       - name: Build sdist
         run: pipx run build --sdist
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          path: dist/*.tar.gz
+          path: dist/${{ matrix.runs-on }}.tar.gz
 
   upload_pypi:
     needs: [build_wheels, build_sdist]
