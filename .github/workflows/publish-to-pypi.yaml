@@ -20,6 +20,8 @@ jobs:
 
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_SKIP: "pp38-*"
 
       - uses: actions/upload-artifact@v4
         with:
