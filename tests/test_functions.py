@@ -352,8 +352,8 @@ def test_speed():
     import sys
     logger.remove()
     logger.add(sys.stdout, level='INFO')
-    ref = create_inp(open('test-other.ark').read().splitlines())
-    hyp = create_inp(open('test-other-mod.ark').read().splitlines())
+    ref = create_inp(open('tests/reftext').read().splitlines())
+    hyp = create_inp(open('tests/hyptext').read().splitlines())
     import cProfile
     pr = cProfile.Profile()
     
