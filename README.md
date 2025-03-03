@@ -89,6 +89,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 26.02.25 Faster alignment, better multihyp support, fixed multihyp bug.
 - 22.06.22 refactored internals to make them simpler, character aware alignment is off by default, added more explanations
 - 20.05.22 fixed bug missing regex dependency
 - 16.05.22 fixed bug causing wrong detailed output when there is utterance with empty reference, and utts with empty reference are not ignored
