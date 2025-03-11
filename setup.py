@@ -4,7 +4,7 @@ import os
 import setuptools
 import sys
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 
 class get_pybind_include(object):
@@ -50,18 +50,6 @@ def has_flag(compiler, flagname):
             return False
     return True
 
-
-def cpp_flag(compiler):
-    """Return the -std=c++17 compiler flag.
-    """
-    if has_flag(compiler, "-std=c++17"):
-        return "-std=c++17"
-    else:
-        raise RuntimeError(
-            "Unsupported compiler -- at least C++17 support " "is needed!"
-        )
-
-
 class BuildExt(build_ext):
     """A custom build extension for adding compiler-specific options."""
 
@@ -73,14 +61,14 @@ class BuildExt(build_ext):
     def build_extensions(self):
         ct = self.compiler.compiler_type
         opts = self.c_opts.get(ct, [])
-        #opts.append('-g')
         if ct == "unix":
             opts.append('-DVERSION_INFO="%s"' % self.distribution.get_version())
-            opts.append(cpp_flag(self.compiler))
+            opts.append('-std=c++17')
             if has_flag(self.compiler, "-fvisibility=hidden"):
                 opts.append("-fvisibility=hidden")
         elif ct == "msvc":
             opts.append('/DVERSION_INFO=\\"%s\\"' % self.distribution.get_version())
+            opts.append('/std:c++17')
         for ext in self.extensions:
             ext.extra_compile_args = opts
         build_ext.build_extensions(self)
