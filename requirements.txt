@@ -5,3 +5,4 @@ loguru
 termcolor
 Levenshtein
 regex
+pytest
