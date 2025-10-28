@@ -14,7 +14,7 @@ typedef int32_t int32;
 
 
 bool isclose(double a, double b) {
-  return abs(a - b) < 0.0001;
+  return abs(a - b) < 0.01;
 }
 
 struct Pair {
