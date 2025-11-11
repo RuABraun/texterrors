@@ -117,6 +117,21 @@ def test_oov_cer():
     assert err / cnt == 0., err / cnt
 
 
+def test_weighted_wer():
+    reflines = ['1 my name is john doe']
+    hyplines = ['1 my name is joe doe']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B',weighted_wer=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 20.0 (ins 0, del 0, sub 1 / 5)
+SER: 100.0
+Weighted WER: 23.1
+"""
+    assert output == ref, show_diff(output, ref)
+
+
 def test_seq_distance():
     a, b = 'a b', 'a b'
     d = texterrors.seq_distance(StringVector(a.split()), StringVector(b.split()))

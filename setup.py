@@ -4,7 +4,7 @@ import os
 import setuptools
 import sys
 
-__version__ = "1.0.10"
+__version__ = "1.0.12"
 
 
 class get_pybind_include(object):
@@ -101,5 +101,7 @@ setup(
     entry_points={'console_scripts': ['texterrors=texterrors.texterrors:cli']},
     install_requires=get_requires(),
     setup_requires=['pybind11'],
-    python_requires='>=3.6'
+    python_requires='>=3.6',
+    package_data={"texterrors": ["data/wordlist"]},
+    include_package_data=True,
 )
