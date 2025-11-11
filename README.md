@@ -10,6 +10,7 @@ Features:
 - Metrics by group (for example speaker)
 - Comparing two hypothesis files to reference
 - Oracle WER
+- **NEW** Weighted WER (English only)
 - Sorting most common errors by frequency or count
 - Measuring performance on keywords
 - Measuring OOV-CER (see [https://arxiv.org/abs/2107.08091](https://arxiv.org/abs/2107.08091) )
@@ -89,6 +90,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 11.11.25 Weighted WER for English
 - 26.02.25 Faster alignment, better multihyp support, fixed multihyp bug.
 - 22.06.22 refactored internals to make them simpler, character aware alignment is off by default, added more explanations
 - 20.05.22 fixed bug missing regex dependency

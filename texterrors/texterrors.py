@@ -13,6 +13,8 @@ import texterrors_align
 from texterrors_align import StringVector
 from loguru import logger
 from termcolor import colored
+from importlib.resources import files, as_file
+
 
 OOV_SYM = '<unk>'
 CPP_WORDS_CONTAINER = True
@@ -691,7 +693,7 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
 def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
-                  freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None):
+                  freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None, weighted_wer=False):
  
     if terminal_width is None:
         terminal_width, _ = shutil.get_terminal_size()
@@ -744,6 +746,44 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
     fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats.total_count})'
              f'\nSER: {100.*error_stats.utt_wrong / len(error_stats.utts):.1f}\n')
 
+    if weighted_wer:
+        words = []
+        probs = []
+
+        wordlist_resource= files('texterrors') / 'data' / 'wordlist'
+        with as_file(wordlist_resource) as wordlist_path:
+            with open(wordlist_path, "r", encoding="utf-8") as fh_wordlist:
+                for line in fh_wordlist:
+                    parts = line.split()
+                    if len(parts) != 2:
+                        print("bad line", repr(line))
+                        continue
+                    word, prob = parts[:2]
+                    words.append(word)
+                    probs.append(float(prob))
+        probs = -np.log(np.array(probs))
+        minscore, maxscore = probs[100], probs[-1]
+        probs[:100] = minscore
+        word2weight = {}
+        maxweight = 0.
+        for word, prob in zip(words, probs):
+            word2weight[word] = max((prob - minscore) / (maxscore - minscore), 1e-1)
+            maxweight = max(maxweight, word2weight[word])
+
+        num = 0
+        for word, cnt in error_stats.subs.items():
+            ref_w, hyp_w = word.split('>')
+            weight = (word2weight.get(ref_w, maxweight) + word2weight.get(hyp_w, maxweight)) / 2.
+            num += weight * cnt
+        for word, cnt in error_stats.ins.items():
+            num += word2weight.get(word, maxweight) * cnt
+        for word, cnt in error_stats.dels.items():
+            num += word2weight.get(word, maxweight) * cnt
+        denom = sum(word2weight.get(word, maxweight) * cnt for word, cnt in error_stats.word_counts.items())
+
+        weighted_wer = num / denom
+        fh.write(f'Weighted WER: {100.*weighted_wer:.1f}\n')
+
     if cer:
         cer = error_stats.char_error_count / float(error_stats.char_count)
         fh.write(f'CER: {100.*cer:.1f} ({error_stats.char_error_count} / {error_stats.char_count})\n')
@@ -785,7 +825,8 @@ def main(
     utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group.', 'option', '') = '',
     usecolor: ('Show detailed output with color (use less -R). Red/white is reference, Green/white model output.', 'flag', 'c')=False,
     num_top_errors: ('Number of errors to show per type in detailed output.', 'option')=10,
-    second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')=''
+    second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')='',
+    weighted_wer: ('Use weighted WER, will weight the errors by word frequency.', 'flag', 'w') = False,
     ):
 
     logger.remove()
@@ -820,7 +861,8 @@ def main(
         process_output(ref_utts, hyp_utts, fh, cer=cer, debug=debug, oov_set=oov_set,
                      ref_file=ref_file, hyp_file=hyp_file, use_chardiff=use_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
-                     isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors)
+                     isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors,
+                     weighted_wer=weighted_wer)
     else:
         ref_utts = read_ref_file(ref_file, isark)
         hyp_uttsa = read_hyp_file(hyp_file, isark, False)
