@@ -33,3 +33,9 @@ Homepage = "https://github.com/RuABraun/texterrors"
 [tool.scikit-build]
 cmake.build-type = "Release"
 wheel.packages = ["texterrors"]
+
+[tool.cibuildwheel]
+build-verbosity = 1
+
+[tool.cibuildwheel.macos.environment]
+MACOSX_DEPLOYMENT_TARGET = "10.14"
