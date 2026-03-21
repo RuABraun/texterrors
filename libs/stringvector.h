@@ -1,18 +1,17 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
 #include <stdexcept>
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
 using namespace std;
 
 
 class StringVector {
 public:
-    StringVector(const py::list& words);
+    StringVector(const nb::list& words);
     StringVector(const vector<std::string>& words);
     ~StringVector();
 

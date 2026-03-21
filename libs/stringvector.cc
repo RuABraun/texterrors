@@ -1,17 +1,19 @@
 #include "stringvector.h"
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/string_view.h>
 
 
-StringVector::StringVector(const py::list& words) {
+StringVector::StringVector(const nb::list& words) {
     int total_length = 0;
-    for (py::handle obj : words) { 
-        const std::string word = obj.cast<std::string>();
+    for (nb::handle obj : words) {
+        const std::string word = nb::cast<std::string>(obj);
         total_length += word.size();
         wordend_index_.push_back(total_length);
     }
     data_.resize(total_length);
     int start_index = 0;
-    for (py::handle obj : words) { 
-        const std::string word = obj.cast<std::string>();
+    for (nb::handle obj : words) {
+        const std::string word = nb::cast<std::string>(obj);
         std::copy(word.begin(), word.end(), data_.begin() + start_index);
         start_index += word.size();
     }
@@ -50,7 +52,7 @@ StringVector StringVector::iter() {
 
 const std::string_view StringVector::next() {
     if (current_index_ == size()) {
-        throw pybind11::stop_iteration();
+        throw nb::stop_iteration();
     }
     return (*this)[current_index_++];
 }
@@ -66,9 +68,9 @@ std::string StringVector::Str() const {
 StringVector::~StringVector() {}
 
 
-void init_stringvector(py::module &m) {
-    py::class_<StringVector>(m, "StringVector")
-        .def(py::init<const py::list&>())
+void init_stringvector(nb::module_ &m) {
+    nb::class_<StringVector>(m, "StringVector")
+        .def(nb::init<const nb::list&>())
         .def("size", &StringVector::size)
         .def("__len__", &StringVector::size)
         .def("__getitem__", &StringVector::operator[])

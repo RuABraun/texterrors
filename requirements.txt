@@ -1,4 +1,8 @@
-pybind11
+build
+cmake
+nanobind
+ninja
+scikit-build-core
 plac
 numpy
 loguru

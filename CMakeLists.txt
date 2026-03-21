@@ -1,13 +1,27 @@
-# For this to work there needs to be a symlink to pybind11 in the libs directory!
-cmake_minimum_required(VERSION 3.9.5)
-SET(CMAKE_CXX_STANDARD 17)
-SET(CMAKE_CXX_FLAGS "-O3 ")
+cmake_minimum_required(VERSION 3.15...3.30)
 
-project(condutor)
+project(texterrors VERSION 1.1.0 LANGUAGES CXX)
 
-include_directories("libs/")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_subdirectory(libs/pybind11)
-pybind11_add_module(texterrors_align libs/stringvector.cc libs/texterrors_align.cc)
+if(CMAKE_VERSION VERSION_LESS 3.18)
+  set(PYTHON_DEV_COMPONENT Development)
+else()
+  set(PYTHON_DEV_COMPONENT Development.Module)
+endif()
 
-set_target_properties(texterrors_align PROPERTIES LIBRARY_OUTPUT_NAME "texterrors_align")
+find_package(Python 3.9 COMPONENTS Interpreter ${PYTHON_DEV_COMPONENT} REQUIRED)
+find_package(nanobind CONFIG REQUIRED)
+
+nanobind_add_module(
+  texterrors_align
+  NOMINSIZE
+  libs/stringvector.cc
+  libs/texterrors_align.cc
+)
+
+target_include_directories(texterrors_align PRIVATE libs)
+
+install(TARGETS texterrors_align LIBRARY DESTINATION . RUNTIME DESTINATION .)

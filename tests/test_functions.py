@@ -62,46 +62,72 @@ def calc_wer(ref, b):
 def test_wer():
     ref = StringVector('IN THE DISCOTHEQUE THE DJ PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split())
     hyp = StringVector('IN THE DISCO TAK THE D J PLAYED PROGRESSIVE HOUSE MUSIC AND TRANCE'.split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 36.36, round(wer, 2)
 
     ref = StringVector('IT FORMS PART OF THE SOUTH EAST DORSET CONURBATION ALONG THE ENGLISH CHANNEL COAST'.split())
     hyp = StringVector("IT FOLLOWS PARDOFELIS LOUSES DORJE THAT COMORE H O LONELY ENGLISH GENOME COTA'S".split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 85.71, round(wer, 2)
 
     ref = StringVector('THE FILM WAS LOADED INTO CASSETTES IN A DARKROOM OR CHANGING BAG'.split())
     hyp = StringVector("THE FILM WAS LOADED INTO CASSETTES IN A DARK ROOM OR CHANGING BAG".split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 16.67, round(wer, 2)
 
     ref = StringVector('GEPHYRIN HAS BEEN SHOWN TO BE NECESSARY FOR GLYR CLUSTERING AT INHIBITORY SYNAPSES'.split())
     hyp = StringVector("THE VIDEOS RISHIRI TUX BINOY CYSTIDIA PHU LIAM CHOLESTEROL ET INNIT PATRESE SYNAPSES".split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, use_chardiff=True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 100.0, round(wer, 2)  # kaldi gets 92.31 ! but has worse alignment
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, use_chardiff=False)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 92.31, round(wer, 2)
 
     ref = StringVector('test sentence okay words ending now'.split())
     hyp = StringVector("test a sentenc ok endin now".split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, use_chardiff=True)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 83.33, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=False)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, use_chardiff=False)
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 66.67, round(wer, 2)
 
     ref = StringVector('speedbird eight six two'.split())
     hyp = StringVector('hello speedbird six two'.split())
-    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, False, use_chardiff=True)
+    ref_aligned, hyp_aligned, _ = texterrors.align_texts(ref, hyp, use_chardiff=True)
     assert ref_aligned[0] == '<eps>'
     wer = calc_wer(ref_aligned, hyp_aligned)
     assert round(wer, 2) == 50.0, round(wer, 2)  # kaldi gets 66.67 ! but has worse alignment
+
+
+def test_align_texts_accepts_lists():
+    ref_words = 'speedbird eight six two'.split()
+    hyp_words = 'hello speedbird six two'.split()
+
+    ref_aligned, hyp_aligned, cost = texterrors.align_texts(ref_words, hyp_words, use_chardiff=True)
+    ref_aligned_sv, hyp_aligned_sv, cost_sv = texterrors.align_texts(
+        StringVector(ref_words), StringVector(hyp_words), use_chardiff=True
+    )
+
+    assert ref_aligned == ref_aligned_sv
+    assert hyp_aligned == hyp_aligned_sv
+    assert cost == cost_sv
+
+
+def test_align_texts_keyword_only_options():
+    ref_words = 'a b'.split()
+    hyp_words = 'a c'.split()
+
+    try:
+        texterrors.align_texts(ref_words, hyp_words, False)
+    except TypeError:
+        pass
+    else:
+        raise AssertionError('align_texts should reject positional optional arguments')
 
 
 def test_oov_cer():
@@ -384,4 +410,3 @@ def test_speed():
 
     logger.info(f'Processing time for speed test is {process_time}')
     assert process_time < 2.
-

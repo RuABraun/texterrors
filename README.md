@@ -24,11 +24,20 @@ See here for [background motivation](https://ruabraun.github.io/jekyll/update/20
 
 
 # Installing  
-Requires minimum python 3.6!  
+Requires minimum python 3.9!  
 ```
 pip install texterrors
 ```
 The package will be installed as `texterrors` and there will be a `texterrors` script in your path.  
+
+For development, create a local environment and install build/test dependencies, then build in place:
+```  
+$ uv venv
+$ env UV_CACHE_DIR=/tmp/uv-cache uv pip install --python .venv/bin/python -r requirements.txt
+$ .venv/bin/cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE=$PWD/.venv/bin/python -Dnanobind_DIR=$PWD/.venv/lib/python3.12/site-packages/nanobind/cmake
+$ .venv/bin/cmake --build build --config Release
+$ .venv/bin/cmake --install build --config Release --prefix $PWD
+```  
 
 # Example
 
@@ -47,6 +56,34 @@ $ texterrors -c -isark -cer -oov-list-f oov_list ref hyp detailed_wer_output
 **Use `less -R` to view the colored output. Skip the `-c` flag to not use color.**
 
 Check `texterrors/__init__.py` to see functions that you may be interested in using from python. 
+
+Direct Python alignment accepts plain token lists and uses keyword-only options:
+```python
+from texterrors import align_texts
+
+ref_aligned, hyp_aligned, cost = align_texts(
+    ["speedbird", "eight", "six", "two"],
+    ["hello", "speedbird", "six", "two"],
+    use_chardiff=True,
+)
+```
+
+# Benchmarking
+
+A small benchmark harness lives in `benchmarks/alignment_benchmark.py`. By default it runs:
+- fast default alignment (`use_chardiff=False`, `skip_detailed=True`)
+- character-aware alignment (`use_chardiff=True`, `skip_detailed=True`)
+- detailed output mode (`use_chardiff=True`, `skip_detailed=False`)
+
+Run it from the repo root like this:
+```  
+$ .venv/bin/python benchmarks/alignment_benchmark.py --repeat 7
+```  
+
+You can also point it at other ark-like files:
+```  
+$ .venv/bin/python benchmarks/alignment_benchmark.py --ref my_ref.txt --hyp my_hyp.txt
+```  
 
 # Options you might want to use
 Call `texterrors -h` to see all options.  
@@ -90,6 +127,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 18.03.26 Migrated the extension module from pybind11 to nanobind and moved builds to CMake/scikit-build-core.
 - 11.11.25 Weighted WER for English
 - 26.02.25 Faster alignment, better multihyp support, fixed multihyp bug.
 - 22.06.22 refactored internals to make them simpler, character aware alignment is off by default, added more explanations
@@ -102,5 +140,3 @@ Recent changes:
 - 04.10.21 fixed bug, nocolor option, refactoring, keywords feature works properly, updated README
 - 22.08.21 added oracle wer feature, cost matrix creation returns cost now  
 - 16.07.21 improves alignment based on ctms (much stricter now).  
-
-TODO: use nanobind
