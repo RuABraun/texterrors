@@ -10,7 +10,7 @@ Features:
 - Metrics by group (for example speaker)
 - Comparing two hypothesis files to reference
 - Oracle WER
-- **NEW** Weighted WER (English only)
+- **NEW** Simple entity accuracy from reference-side casing
 - Sorting most common errors by frequency or count
 - Measuring performance on keywords
 - Measuring OOV-CER (see [https://arxiv.org/abs/2107.08091](https://arxiv.org/abs/2107.08091) )
@@ -94,6 +94,8 @@ Call `texterrors -h` to see all options.
 to get per speaker WER for example).  
 
 `-second-hyp-f` - Use to compare the outputs of two different models to the reference.
+
+`-w` - Calculate simple entity accuracy using reference-side casing, then lowercase text for scoring.
   
 `-freq-sort` - Sort errors by frequency rather than count
   
@@ -128,6 +130,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 Recent changes:  
 
 - 18.03.26 Migrated the extension module from pybind11 to nanobind and moved builds to CMake/scikit-build-core.
+- 24.03.26 Removed weighted WER and added simple entity accuracy from reference-side casing.
 - 11.11.25 Weighted WER for English
 - 26.02.25 Faster alignment, better multihyp support, fixed multihyp bug.
 - 22.06.22 refactored internals to make them simpler, character aware alignment is off by default, added more explanations

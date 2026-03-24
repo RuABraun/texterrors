@@ -6,18 +6,15 @@ from dataclasses import dataclass, field
 from itertools import chain
 from typing import List, Tuple, Dict
 
-import numpy as np
 import plac
 import regex as re
 from loguru import logger
 from termcolor import colored
-from importlib.resources import files, as_file
 from .alignment import (
     CPP_WORDS_CONTAINER,
     StringVector,
     align_texts,
     align_texts_ctm,
-    calc_edit_distance_fast,
     convert_to_int,
     get_oov_cer,
     lev_distance,
@@ -26,6 +23,15 @@ from .alignment import (
 
 
 OOV_SYM = '<unk>'
+SIMPLE_ENTITY_STOPWORDS = {
+    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'being', 'but', 'by',
+    'can', 'could', 'did', 'do', 'does', 'for', 'from', 'had', 'has', 'have',
+    'he', 'her', 'hers', 'him', 'his', 'i', 'if', 'in', 'is', 'it', 'its',
+    'may', 'might', 'my', 'nor', 'not', 'of', 'on', 'or', 'our', 'ours',
+    'she', 'so', 'than', 'that', 'the', 'their', 'theirs', 'them', 'there',
+    'these', 'they', 'this', 'those', 'to', 'us', 'was', 'we', 'were', 'will',
+    'with', 'would', 'you', 'your', 'yours',
+}
 
 
 @dataclass
@@ -178,7 +184,50 @@ class ErrorStats:
     keywords_predicted: int = 0
     keywords_output: int = 0
     keywords_count: int = 0
+    simple_entity_matches: int = 0
+    simple_entity_count: int = 0
     word_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+
+def _has_uppercase_evidence(word):
+    return any(ch.isupper() for ch in word)
+
+
+def _is_titlecase_token(word):
+    if not word:
+        return False
+    return word[:1].isupper() and not word.isupper() and word[1:] == word[1:].lower()
+
+
+def _extract_simple_entity_words(ref_utts):
+    entity_words = set()
+    for utt in ref_utts.values():
+        for idx, word in enumerate(utt.words):
+            if not _has_uppercase_evidence(word):
+                continue
+            lowered = word.lower()
+            if idx == 0 and _is_titlecase_token(word) and lowered in SIMPLE_ENTITY_STOPWORDS:
+                continue
+            entity_words.add(lowered)
+    return entity_words
+
+
+def _lowercase_utt(utt):
+    return Utt(utt.uid, StringVector([word.lower() for word in utt.words]), utt.times, utt.durs)
+
+
+def _lowercase_utts(utts, oracle_wer):
+    lowered_utts = {}
+    if not oracle_wer:
+        for uttid, utt in utts.items():
+            lowered_utts[uttid] = _lowercase_utt(utt)
+        return lowered_utts
+
+    lowered_utts = defaultdict(list)
+    for uttid, utt_list in utts.items():
+        for utt in utt_list:
+            lowered_utts[uttid].append(_lowercase_utt(utt))
+    return lowered_utts
 
 
 def read_files(ref_f, hyp_f, isark, isctm, keywords_f, utt_group_map_f, oracle_wer):
@@ -225,11 +274,14 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
 
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
-                  group_stats, nocolor, insert_tok, fullprint=False, suppress_warnings=False):
+                  group_stats, nocolor, insert_tok, fullprint=False, suppress_warnings=False,
+                  simple_entity_words=None):
 
     error_stats = ErrorStats()
     dct_char = {insert_tok: 0, 0: insert_tok}
     multilines = []
+    if simple_entity_words is None:
+        simple_entity_words = set()
     for utt in ref_utts.keys():
         logger.debug('%s' % utt)
         ref = ref_utts[utt]
@@ -273,10 +325,14 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                 error_stats.keywords_output += 1
             if ref_w in oov_set:
                 error_stats.oov_word_count += 1
+            if ref_w in simple_entity_words:
+                error_stats.simple_entity_count += 1
 
             if ref_w == hyp_w:
                 if hyp_w in keywords:
                     error_stats.keywords_predicted += 1
+                if ref_w in simple_entity_words:
+                    error_stats.simple_entity_matches += 1
                 if not fullprint:
                     double_line.add_lineelement(ref_w, '')
                 else:
@@ -512,7 +568,8 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
 def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
-                  freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None, weighted_wer=False):
+                  freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None,
+                  simple_entity_accuracy=False):
  
     if terminal_width is None:
         terminal_width, _ = shutil.get_terminal_size()
@@ -524,6 +581,13 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
         keywords = set()
     if utt_group_map is None:
         utt_group_map = {}
+    simple_entity_words = set()
+    if simple_entity_accuracy:
+        simple_entity_words = _extract_simple_entity_words(ref_utts)
+        ref_utts = _lowercase_utts(ref_utts, oracle_wer=False)
+        hyp_utts = _lowercase_utts(hyp_utts, oracle_wer=oracle_wer)
+        oov_set = {word.lower() for word in oov_set}
+        keywords = {word.lower() for word in keywords}
 
     group_stats = {}
     groups = set(utt_group_map.values())
@@ -534,7 +598,7 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
 
     multilines, error_stats = process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer,
-                  utt_group_map, group_stats, nocolor, insert_tok)
+                  utt_group_map, group_stats, nocolor, insert_tok, simple_entity_words=simple_entity_words)
 
     if not skip_detailed and not oracle_wer:
         if nocolor:
@@ -565,43 +629,15 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
     fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats.total_count})'
              f'\nSER: {100.*error_stats.utt_wrong / len(error_stats.utts):.1f}\n')
 
-    if weighted_wer:
-        words = []
-        probs = []
-
-        wordlist_resource= files('texterrors') / 'data' / 'wordlist'
-        with as_file(wordlist_resource) as wordlist_path:
-            with open(wordlist_path, "r", encoding="utf-8") as fh_wordlist:
-                for line in fh_wordlist:
-                    parts = line.split()
-                    if len(parts) != 2:
-                        print("bad line", repr(line))
-                        continue
-                    word, prob = parts[:2]
-                    words.append(word)
-                    probs.append(float(prob))
-        probs = -np.log(np.array(probs))
-        minscore, maxscore = probs[100], probs[-1]
-        probs[:100] = minscore
-        word2weight = {}
-        maxweight = 0.
-        for word, prob in zip(words, probs):
-            word2weight[word] = max((prob - minscore) / (maxscore - minscore), 1e-1)
-            maxweight = max(maxweight, word2weight[word])
-
-        num = 0
-        for word, cnt in error_stats.subs.items():
-            ref_w, hyp_w = word.split('>')
-            weight = (word2weight.get(ref_w, maxweight) + word2weight.get(hyp_w, maxweight)) / 2.
-            num += weight * cnt
-        for word, cnt in error_stats.ins.items():
-            num += word2weight.get(word, maxweight) * cnt
-        for word, cnt in error_stats.dels.items():
-            num += word2weight.get(word, maxweight) * cnt
-        denom = sum(word2weight.get(word, maxweight) * cnt for word, cnt in error_stats.word_counts.items())
-
-        weighted_wer = num / denom
-        fh.write(f'Weighted WER: {100.*weighted_wer:.1f}\n')
+    if simple_entity_accuracy:
+        simple_entity_accuracy_value = (
+            error_stats.simple_entity_matches / error_stats.simple_entity_count
+            if error_stats.simple_entity_count else 0.
+        )
+        fh.write(
+            f'Simple Entity Accuracy: {100.*simple_entity_accuracy_value:.1f} '
+            f'({error_stats.simple_entity_matches} / {error_stats.simple_entity_count})\n'
+        )
 
     if cer:
         cer = error_stats.char_error_count / float(error_stats.char_count)
@@ -645,7 +681,7 @@ def main(
     usecolor: ('Show detailed output with color (use less -R). Red/white is reference, Green/white model output.', 'flag', 'c')=False,
     num_top_errors: ('Number of errors to show per type in detailed output.', 'option')=10,
     second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')='',
-    weighted_wer: ('Use weighted WER, will weight the errors by word frequency.', 'flag', 'w') = False,
+    simple_entity_accuracy: ('Use simple entity accuracy from reference-side casing cues.', 'flag', 'w') = False,
     ):
 
     logger.remove()
@@ -681,7 +717,7 @@ def main(
                      ref_file=ref_file, hyp_file=hyp_file, use_chardiff=use_chardiff, skip_detailed=skip_detailed,
                      keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
                      isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors,
-                     weighted_wer=weighted_wer)
+                     simple_entity_accuracy=simple_entity_accuracy)
     else:
         ref_utts = read_ref_file(ref_file, isark)
         hyp_uttsa = read_hyp_file(hyp_file, isark, False)

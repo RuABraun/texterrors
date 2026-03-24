@@ -143,17 +143,47 @@ def test_oov_cer():
     assert err / cnt == 0., err / cnt
 
 
-def test_weighted_wer():
-    reflines = ['1 my name is john doe']
-    hyplines = ['1 my name is joe doe']
+def test_simple_entity_accuracy_basic():
+    reflines = ['1 The US met Alice']
+    hyplines = ['1 the us met alice']
     refs = create_inp(reflines)
     hyps = create_inp(hyplines)
     buffer = io.StringIO()
-    texterrors.process_output(refs, hyps, buffer, 'A', 'B',weighted_wer=True, skip_detailed=True)
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 20.0 (ins 0, del 0, sub 1 / 5)
-SER: 100.0
-Weighted WER: 23.1
+    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 4)
+SER: 0.0
+Simple Entity Accuracy: 100.0 (2 / 2)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_recall_and_global_vocab():
+    reflines = ['1 Alice arrived', '2 alice left']
+    hyplines = ['1 alice arrived', '2 bob left']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 25.0 (ins 0, del 0, sub 1 / 4)
+SER: 50.0
+Simple Entity Accuracy: 50.0 (1 / 2)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_titlecase_stoplist_only_applies_utterance_initial():
+    reflines = ['1 The Meeting started']
+    hyplines = ['1 the meeting started']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
+SER: 0.0
+Simple Entity Accuracy: 100.0 (1 / 1)
 """
     assert output == ref, show_diff(output, ref)
 
