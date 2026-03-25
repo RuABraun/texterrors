@@ -95,7 +95,7 @@ to get per speaker WER for example).
 
 `-second-hyp-f` - Use to compare the outputs of two different models to the reference.
 
-`-w` - Calculate simple entity accuracy using reference-side casing, then lowercase text for scoring.
+`-w` - Calculate simple entity accuracy using reference-side casing, the top 10,000 common words for sentence-start filtering, then lowercase text for scoring.
   
 `-freq-sort` - Sort errors by frequency rather than count
   
@@ -129,6 +129,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 25.03.26 Refined simple entity accuracy with top-10k sentence-start filtering, full-stop sentence resets, and lowercase-occurrence suppression.
 - 18.03.26 Migrated the extension module from pybind11 to nanobind and moved builds to CMake/scikit-build-core.
 - 24.03.26 Removed weighted WER and added simple entity accuracy from reference-side casing.
 - 11.11.25 Weighted WER for English

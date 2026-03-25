@@ -3,6 +3,8 @@ import shutil
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
+from importlib.resources import as_file, files
 from itertools import chain
 from typing import List, Tuple, Dict
 
@@ -23,15 +25,7 @@ from .alignment import (
 
 
 OOV_SYM = '<unk>'
-SIMPLE_ENTITY_STOPWORDS = {
-    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'been', 'being', 'but', 'by',
-    'can', 'could', 'did', 'do', 'does', 'for', 'from', 'had', 'has', 'have',
-    'he', 'her', 'hers', 'him', 'his', 'i', 'if', 'in', 'is', 'it', 'its',
-    'may', 'might', 'my', 'nor', 'not', 'of', 'on', 'or', 'our', 'ours',
-    'she', 'so', 'than', 'that', 'the', 'their', 'theirs', 'them', 'there',
-    'these', 'they', 'this', 'those', 'to', 'us', 'was', 'we', 'were', 'will',
-    'with', 'would', 'you', 'your', 'yours',
-}
+SIMPLE_ENTITY_COMMON_WORD_LIMIT = 10000
 
 
 @dataclass
@@ -199,16 +193,51 @@ def _is_titlecase_token(word):
     return word[:1].isupper() and not word.isupper() and word[1:] == word[1:].lower()
 
 
+def _contains_full_stop(word):
+    return '.' in word
+
+
+@lru_cache(maxsize=1)
+def _load_simple_entity_common_words():
+    common_words = set()
+    wordlist_resource = files('texterrors') / 'data' / 'wordlist'
+    with as_file(wordlist_resource) as wordlist_path:
+        with open(wordlist_path, 'r', encoding='utf-8') as fh_wordlist:
+            for idx, line in enumerate(fh_wordlist):
+                if idx >= SIMPLE_ENTITY_COMMON_WORD_LIMIT:
+                    break
+                parts = line.split()
+                if not parts:
+                    continue
+                common_words.add(parts[0].lower())
+    return common_words
+
+
 def _extract_simple_entity_words(ref_utts):
+    common_words = _load_simple_entity_common_words()
+    lowercase_words = set()
+    for utt in ref_utts.values():
+        for word in utt.words:
+            if _has_uppercase_evidence(word):
+                continue
+            lowercase_words.add(word.lower())
+
     entity_words = set()
     for utt in ref_utts.values():
-        for idx, word in enumerate(utt.words):
+        sentence_start = True
+        for word in utt.words:
             if not _has_uppercase_evidence(word):
+                sentence_start = _contains_full_stop(word)
                 continue
             lowered = word.lower()
-            if idx == 0 and _is_titlecase_token(word) and lowered in SIMPLE_ENTITY_STOPWORDS:
+            if sentence_start and _is_titlecase_token(word) and lowered in common_words:
+                sentence_start = _contains_full_stop(word)
+                continue
+            if lowered in lowercase_words:
+                sentence_start = _contains_full_stop(word)
                 continue
             entity_words.add(lowered)
+            sentence_start = _contains_full_stop(word)
     return entity_words
 
 

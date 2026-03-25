@@ -158,9 +158,9 @@ Simple Entity Accuracy: 100.0 (2 / 2)
     assert output == ref, show_diff(output, ref)
 
 
-def test_simple_entity_accuracy_recall_and_global_vocab():
-    reflines = ['1 Alice arrived', '2 alice left']
-    hyplines = ['1 alice arrived', '2 bob left']
+def test_simple_entity_accuracy_skips_words_seen_elsewhere_lowercase():
+    reflines = ['1 Xiomara arrived', '2 xiomara left']
+    hyplines = ['1 xiomara arrived', '2 bob left']
     refs = create_inp(reflines)
     hyps = create_inp(hyplines)
     buffer = io.StringIO()
@@ -168,7 +168,7 @@ def test_simple_entity_accuracy_recall_and_global_vocab():
     output = buffer.getvalue()
     ref ="""WER: 25.0 (ins 0, del 0, sub 1 / 4)
 SER: 50.0
-Simple Entity Accuracy: 50.0 (1 / 2)
+Simple Entity Accuracy: 0.0 (0 / 0)
 """
     assert output == ref, show_diff(output, ref)
 
@@ -184,6 +184,51 @@ def test_simple_entity_accuracy_titlecase_stoplist_only_applies_utterance_initia
     ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
 SER: 0.0
 Simple Entity Accuracy: 100.0 (1 / 1)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_uses_common_word_list_for_sentence_initial_titlecase():
+    reflines = ['1 Time met Alice']
+    hyplines = ['1 time met alice']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
+SER: 0.0
+Simple Entity Accuracy: 100.0 (1 / 1)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_resets_sentence_start_after_full_stop():
+    reflines = ['1 Xiomara left. The CEO arrived']
+    hyplines = ['1 xiomara left. the ceo arrived']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 5)
+SER: 0.0
+Simple Entity Accuracy: 100.0 (2 / 2)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_preserves_candidate_when_not_seen_lowercase():
+    reflines = ['1 Xiomara arrived', '2 Zbigniew left']
+    hyplines = ['1 xiomara arrived', '2 zbigniew left']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 4)
+SER: 0.0
+Simple Entity Accuracy: 100.0 (2 / 2)
 """
     assert output == ref, show_diff(output, ref)
 
