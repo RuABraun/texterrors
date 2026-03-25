@@ -129,6 +129,7 @@ This results in a WER of 83.3\% because of the extra insertion and deletion. And
 
 Recent changes:  
 
+- 25.03.26 Added detailed simple-entity hit/miss summaries and documented the extraction heuristic.
 - 25.03.26 Refined simple entity accuracy with top-10k sentence-start filtering, full-stop sentence resets, and lowercase-occurrence suppression.
 - 18.03.26 Migrated the extension module from pybind11 to nanobind and moved builds to CMake/scikit-build-core.
 - 24.03.26 Removed weighted WER and added simple entity accuracy from reference-side casing.

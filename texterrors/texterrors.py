@@ -180,6 +180,8 @@ class ErrorStats:
     keywords_count: int = 0
     simple_entity_matches: int = 0
     simple_entity_count: int = 0
+    simple_entity_recognized: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    simple_entity_missed: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     word_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
 
@@ -214,6 +216,12 @@ def _load_simple_entity_common_words():
 
 
 def _extract_simple_entity_words(ref_utts):
+    """Identify entity-like reference words from casing, sentence starts, and lowercase reuse.
+
+    A token is kept as a simple entity when it shows uppercase evidence, is not just a
+    sentence-initial common word, and does not also appear elsewhere in the reference
+    as a lowercase token.
+    """
     common_words = _load_simple_entity_common_words()
     lowercase_words = set()
     for utt in ref_utts.values():
@@ -301,6 +309,16 @@ def print_detailed_stats(fh, ins, dels, subs, num_top_errors, freq_sort, word_co
         fh.write(f'{v}\t{c}\t{word_counts[ref_w]}\n')
 
 
+def print_simple_entity_stats(fh, simple_entity_missed, simple_entity_recognized, num_top_errors):
+    fh.write('\nUnrecognized Simple Entities:\n')
+    for word, count in sorted(simple_entity_missed.items(), key=lambda x: (-x[1], x[0]))[:num_top_errors]:
+        fh.write(f'{word}\t{count}\n')
+
+    fh.write('\nRecognized Simple Entities:\n')
+    for word, count in sorted(simple_entity_recognized.items(), key=lambda x: (-x[1], x[0]))[:num_top_errors]:
+        fh.write(f'{word}\t{count}\n')
+
+
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                   terminal_width, oracle_wer, keywords, oov_set, cer, utt_group_map,
                   group_stats, nocolor, insert_tok, fullprint=False, suppress_warnings=False,
@@ -362,6 +380,7 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                     error_stats.keywords_predicted += 1
                 if ref_w in simple_entity_words:
                     error_stats.simple_entity_matches += 1
+                    error_stats.simple_entity_recognized[ref_w] += 1
                 if not fullprint:
                     double_line.add_lineelement(ref_w, '')
                 else:
@@ -372,6 +391,8 @@ def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
                 error_count += 1
                 if ref_w in oov_set:
                     error_stats.oov_word_error += 1
+                if ref_w in simple_entity_words:
+                    error_stats.simple_entity_missed[ref_w] += 1
                 if ref_w == '<eps>':
                     if fullprint:
                         double_line.add_lineelement('', hyp_w)
@@ -690,6 +711,13 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
     if not skip_detailed:
         print_detailed_stats(fh, error_stats.ins, error_stats.dels, error_stats.subs, num_top_errors, freq_sort,
                              error_stats.word_counts)
+        if simple_entity_accuracy:
+            print_simple_entity_stats(
+                fh,
+                error_stats.simple_entity_missed,
+                error_stats.simple_entity_recognized,
+                num_top_errors,
+            )
 
 
 def main(

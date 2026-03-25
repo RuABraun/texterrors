@@ -309,6 +309,52 @@ wir>sommer\t1\t1
 """
     assert output == ref
 
+
+def test_process_output_simple_entity_detailed_stats():
+    reflines = ['1 Xiomara met Zbigniew']
+    hyplines = ['1 xiomara met bob']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+
+    buffer = io.StringIO()
+    texterrors.process_output(
+        refs,
+        hyps,
+        buffer,
+        ref_file='A',
+        hyp_file='B',
+        nocolor=True,
+        simple_entity_accuracy=True,
+        num_top_errors=5,
+    )
+    output = buffer.getvalue()
+
+    ref = """\"A\" is treated as reference, \"B\" as hypothesis. Errors are capitalized.
+Per utt details:
+1
+xiomara met ZBIGNIEW
+              BOB   
+
+WER: 33.3 (ins 0, del 0, sub 1 / 3)
+SER: 100.0
+Simple Entity Accuracy: 50.0 (1 / 2)
+
+Insertions:
+
+Deletions (second number is word count total):
+
+Substitutions (reference>hypothesis, second number is reference word count total):
+zbigniew>bob\t1\t1
+
+Unrecognized Simple Entities:
+zbigniew\t1
+
+Recognized Simple Entities:
+xiomara\t1
+"""
+    assert output == ref
+
+
 def test_process_output_multi():
     reflines = ['0 telefonat mit frau spring klee vom siebenundzwanzigsten august einundzwanzig ich erkläre frau spring klee dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktor wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zu meniskus rissen klar geregelt ist']
     hypalines = ['0 telefonat mit frau sprinkler vom siebenundzwanzigsten august einundzwanzig ich erkläre frau sprinkle dass die bundes gerichtliche recht sprechung im zusammen hang mit dem unfall begriff beziehungsweise dem ungewöhnlichen äusseren faktoren wie auch bezüglich der unfall ähnlichen körper schädigungen insbesondere die analogie zum meniskus rissen klar geregelt ist\'']
