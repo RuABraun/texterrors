@@ -189,16 +189,6 @@ def _has_uppercase_evidence(word):
     return any(ch.isupper() for ch in word)
 
 
-def _is_titlecase_token(word):
-    if not word:
-        return False
-    return word[:1].isupper() and not word.isupper() and word[1:] == word[1:].lower()
-
-
-def _contains_full_stop(word):
-    return '.' in word
-
-
 @lru_cache(maxsize=1)
 def _load_simple_entity_common_words():
     common_words = set()
@@ -216,11 +206,11 @@ def _load_simple_entity_common_words():
 
 
 def _extract_simple_entity_words(ref_utts):
-    """Identify entity-like reference words from casing, sentence starts, and lowercase reuse.
+    """Identify entity-like reference words from casing, common-word filtering, and lowercase reuse.
 
-    A token is kept as a simple entity when it shows uppercase evidence, is not just a
-    sentence-initial common word, and does not also appear elsewhere in the reference
-    as a lowercase token.
+    A token is kept as a simple entity when it shows uppercase evidence, its lowercase
+    form is not in the common-word list, and it does not also appear elsewhere in the
+    reference as a lowercase token.
     """
     common_words = _load_simple_entity_common_words()
     lowercase_words = set()
@@ -232,20 +222,13 @@ def _extract_simple_entity_words(ref_utts):
 
     entity_words = set()
     for utt in ref_utts.values():
-        sentence_start = True
         for word in utt.words:
             if not _has_uppercase_evidence(word):
-                sentence_start = _contains_full_stop(word)
                 continue
             lowered = word.lower()
-            if sentence_start and _is_titlecase_token(word) and lowered in common_words:
-                sentence_start = _contains_full_stop(word)
-                continue
-            if lowered in lowercase_words:
-                sentence_start = _contains_full_stop(word)
+            if lowered in common_words or lowered in lowercase_words:
                 continue
             entity_words.add(lowered)
-            sentence_start = _contains_full_stop(word)
     return entity_words
 
 
