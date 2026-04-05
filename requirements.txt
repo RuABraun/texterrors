@@ -3,7 +3,7 @@ cmake
 nanobind
 ninja
 scikit-build-core
-plac
+typer
 numpy
 loguru
 termcolor

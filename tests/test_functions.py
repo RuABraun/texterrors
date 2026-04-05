@@ -1,5 +1,6 @@
 """ Run command: PYTHONPATH=. pytest .
 """
+import json
 import os
 import io
 import time
@@ -12,9 +13,11 @@ from texterrors.texterrors import StringVector
 from dataclasses import dataclass
 import difflib
 from loguru import logger
+from typer.testing import CliRunner
 
 logger.remove()
 logger.add(sys.stderr, level="INFO")
+runner = CliRunner()
 
 def show_diff(text1, text2):
     # Split the strings into lines to compare them line by line
@@ -151,8 +154,8 @@ def test_simple_entity_accuracy_basic():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 4)
-SER: 0.0
+    ref ="""WER: 75.0 (ins 0, del 0, sub 3 / 4)
+SER: 100.0
 Simple Entity Accuracy: 100.0 (1 / 1)
 """
     assert output == ref, show_diff(output, ref)
@@ -166,8 +169,8 @@ def test_simple_entity_accuracy_skips_words_seen_elsewhere_lowercase():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 25.0 (ins 0, del 0, sub 1 / 4)
-SER: 50.0
+    ref ="""WER: 50.0 (ins 0, del 0, sub 2 / 4)
+SER: 100.0
 Simple Entity Accuracy: 0.0 (0 / 0)
 """
     assert output == ref, show_diff(output, ref)
@@ -181,8 +184,8 @@ def test_simple_entity_accuracy_titlecase_common_word_is_filtered_anywhere():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
-SER: 0.0
+    ref ="""WER: 66.7 (ins 0, del 0, sub 2 / 3)
+SER: 100.0
 Simple Entity Accuracy: 100.0 (1 / 1)
 """
     assert output == ref, show_diff(output, ref)
@@ -196,8 +199,8 @@ def test_simple_entity_accuracy_uses_common_word_list_for_titlecase():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
-SER: 0.0
+    ref ="""WER: 66.7 (ins 0, del 0, sub 2 / 3)
+SER: 100.0
 Simple Entity Accuracy: 0.0 (0 / 0)
 """
     assert output == ref, show_diff(output, ref)
@@ -211,8 +214,8 @@ def test_simple_entity_accuracy_ignores_full_stops_for_rare_candidates():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 4)
-SER: 0.0
+    ref ="""WER: 50.0 (ins 0, del 0, sub 2 / 4)
+SER: 100.0
 Simple Entity Accuracy: 100.0 (2 / 2)
 """
     assert output == ref, show_diff(output, ref)
@@ -226,8 +229,53 @@ def test_simple_entity_accuracy_preserves_candidate_when_not_seen_lowercase():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 4)
-SER: 0.0
+    ref ="""WER: 50.0 (ins 0, del 0, sub 2 / 4)
+SER: 100.0
+Simple Entity Accuracy: 100.0 (2 / 2)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_ignores_spaces_when_matching():
+    reflines = ['1 GenAI shipped', '2 CodeWhisperer launched']
+    hyplines = ['1 gen ai shipped', '2 code whisperer launched']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 100.0 (ins 2, del 0, sub 2 / 4)
+SER: 100.0
+Simple Entity Accuracy: 100.0 (2 / 2)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_requires_match_at_aligned_position():
+    reflines = ['1 GenAI launched today']
+    hyplines = ['1 launched today gen ai']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 100.0 (ins 2, del 1, sub 0 / 3)
+SER: 100.0
+Simple Entity Accuracy: 0.0 (0 / 1)
+"""
+    assert output == ref, show_diff(output, ref)
+
+
+def test_simple_entity_accuracy_does_not_lowercase_main_scoring():
+    reflines = ['1 Xiomara met Zbigniew']
+    hyplines = ['1 xiomara met zbigniew']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+    buffer = io.StringIO()
+    texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
+    output = buffer.getvalue()
+    ref ="""WER: 66.7 (ins 0, del 0, sub 2 / 3)
+SER: 100.0
 Simple Entity Accuracy: 100.0 (2 / 2)
 """
     assert output == ref, show_diff(output, ref)
@@ -241,8 +289,8 @@ def test_simple_entity_accuracy_skips_allcaps_common_word():
     buffer = io.StringIO()
     texterrors.process_output(refs, hyps, buffer, 'A', 'B', simple_entity_accuracy=True, skip_detailed=True)
     output = buffer.getvalue()
-    ref ="""WER: 0.0 (ins 0, del 0, sub 0 / 3)
-SER: 0.0
+    ref ="""WER: 66.7 (ins 0, del 0, sub 2 / 3)
+SER: 100.0
 Simple Entity Accuracy: 100.0 (1 / 1)
 """
     assert output == ref, show_diff(output, ref)
@@ -347,10 +395,10 @@ def test_process_output_simple_entity_detailed_stats():
     ref = """\"A\" is treated as reference, \"B\" as hypothesis. Errors are capitalized.
 Per utt details:
 1
-xiomara met ZBIGNIEW
-              BOB   
+XIOMARA met ZBIGNIEW
+XIOMARA       BOB   
 
-WER: 33.3 (ins 0, del 0, sub 1 / 3)
+WER: 66.7 (ins 0, del 0, sub 2 / 3)
 SER: 100.0
 Simple Entity Accuracy: 50.0 (1 / 2)
 
@@ -359,7 +407,8 @@ Insertions:
 Deletions (second number is word count total):
 
 Substitutions (reference>hypothesis, second number is reference word count total):
-zbigniew>bob\t1\t1
+Xiomara>xiomara\t1\t1
+Zbigniew>bob\t1\t1
 
 Unrecognized Simple Entities:
 zbigniew\t1
@@ -368,6 +417,33 @@ Recognized Simple Entities:
 xiomara\t1
 """
     assert output == ref
+
+
+def test_process_output_simple_entity_details_tsv():
+    reflines = ['1 GenAI launched', '2 Xiomara met Zbigniew']
+    hyplines = ['1 gen ai launched', '2 xiomara met bob']
+    refs = create_inp(reflines)
+    hyps = create_inp(hyplines)
+
+    buffer = io.StringIO()
+    entity_details = io.StringIO()
+    texterrors.process_output(
+        refs,
+        hyps,
+        buffer,
+        ref_file='A',
+        hyp_file='B',
+        simple_entity_accuracy=True,
+        skip_detailed=True,
+        simple_entity_details_fh=entity_details,
+    )
+
+    ref = """reference_file\thypothesis_file\tutt_id\toccurrence_index\treference_entity\tnormalized_reference_entity\thypothesis_output\tcategory
+A\tB\t1\t1\tGenAI\tgenai\tgenai\tmatch
+A\tB\t2\t1\tXiomara\txiomara\txiomara\tmatch
+A\tB\t2\t2\tZbigniew\tzbigniew\tbob\tsubstitution
+"""
+    assert entity_details.getvalue() == ref
 
 
 def test_process_output_multi():
@@ -522,6 +598,143 @@ wo>shop\t1\t1
 wir>sommer\t1\t1
 """
     assert output == ref
+
+
+def test_cli_multi_hyp_compare_with_out(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_a = tmp_path / 'hyp_a.ark'
+    hyp_b = tmp_path / 'hyp_b.ark'
+    out_f = tmp_path / 'comparison.txt'
+
+    ref_f.write_text('1 hello world\n')
+    hyp_a.write_text('1 hello world\n')
+    hyp_b.write_text('1 hello there\n')
+
+    result = runner.invoke(texterrors.app, ['--isark', '-s', '-o', str(out_f), str(ref_f), str(hyp_a), str(hyp_b)])
+    assert result.exit_code == 0, result.output
+    output = out_f.read_text()
+
+    ref = f"""Comparison:
+file\tWER\tSER
+{hyp_a}\t0.0\t0.0
+{hyp_b}\t50.0\t100.0
+"""
+    assert output == ref
+
+
+def test_cli_json_output_single(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_f = tmp_path / 'hyp.ark'
+
+    ref_f.write_text('1 hello world\n')
+    hyp_f.write_text('1 hello there\n')
+
+    result = runner.invoke(
+        texterrors.app,
+        ['--isark', '--output-format', 'json', str(ref_f), str(hyp_f)],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    assert payload['reference_file'] == str(ref_f)
+    assert payload['hypothesis_file'] == str(hyp_f)
+    assert payload['summary']['wer'] == 50.0
+    assert payload['summary']['sub_count'] == 1
+    assert payload['summary']['total_ref_words'] == 2
+    assert payload['top_errors']['substitutions'] == [
+        {
+            'reference': 'world',
+            'hypothesis': 'there',
+            'count': 1,
+            'reference_count': 1,
+        }
+    ]
+    assert 'Per utt details' not in result.output
+
+
+def test_cli_json_output_multi_hyp(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_a = tmp_path / 'hyp_a.ark'
+    hyp_b = tmp_path / 'hyp_b.ark'
+
+    ref_f.write_text('1 hello world\n')
+    hyp_a.write_text('1 hello world\n')
+    hyp_b.write_text('1 hello there\n')
+
+    result = runner.invoke(
+        texterrors.app,
+        ['--isark', '--output-format', 'json', str(ref_f), str(hyp_a), str(hyp_b)],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+
+    assert payload['reference_file'] == str(ref_f)
+    assert [entry['hypothesis_file'] for entry in payload['outputs']] == [str(hyp_a), str(hyp_b)]
+    assert [entry['summary']['wer'] for entry in payload['outputs']] == [0.0, 50.0]
+    assert payload['outputs'][1]['top_errors']['substitutions'] == [
+        {
+            'reference': 'world',
+            'hypothesis': 'there',
+            'count': 1,
+            'reference_count': 1,
+        }
+    ]
+    assert 'Comparison:' not in result.output
+
+
+def test_cli_multi_hyp_simple_entity_details_out(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_a = tmp_path / 'hyp_a.ark'
+    hyp_b = tmp_path / 'hyp_b.ark'
+    details_f = tmp_path / 'entity_details.tsv'
+
+    ref_f.write_text('1 GenAI launched\n')
+    hyp_a.write_text('1 gen ai launched\n')
+    hyp_b.write_text('1 launched\n')
+
+    result = runner.invoke(
+        texterrors.app,
+        ['--isark', '-s', '--entity-details', str(details_f), str(ref_f), str(hyp_a), str(hyp_b)],
+    )
+    assert result.exit_code == 0, result.output
+    output = details_f.read_text()
+
+    ref = f"""reference_file\thypothesis_file\tutt_id\toccurrence_index\treference_entity\tnormalized_reference_entity\thypothesis_output\tcategory
+{ref_f}\t{hyp_a}\t1\t1\tGenAI\tgenai\tgenai\tmatch
+{ref_f}\t{hyp_b}\t1\t1\tGenAI\tgenai\t\tdeletion
+"""
+    assert output == ref
+
+
+def test_cli_warns_on_old_positional_output_interface(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_f = tmp_path / 'hyp.ark'
+    out_f = tmp_path / 'new_output.txt'
+
+    ref_f.write_text('1 hello world\n')
+    hyp_f.write_text('1 hello world\n')
+
+    result = runner.invoke(texterrors.app, ['--isark', str(ref_f), str(hyp_f), str(out_f)])
+    assert result.exit_code != 0
+    assert 'old CLI interface' in result.output
+    assert '-o/--out' in result.output
+
+
+def test_cli_rejects_entity_details_with_oracle_wer(tmp_path):
+    ref_f = tmp_path / 'ref.ark'
+    hyp_f = tmp_path / 'hyp.ark'
+    details_f = tmp_path / 'entity_details.tsv'
+
+    ref_f.write_text('1 hello world\n')
+    hyp_f.write_text('1 hello world\n')
+
+    result = runner.invoke(
+        texterrors.app,
+        ['--isark', '--oracle-wer', '--entity-details', str(details_f), str(ref_f), str(hyp_f)],
+    )
+    assert result.exit_code != 0
+    assert '--entity-details' in result.output
+    assert '--oracle-wer' in result.output
 
 
 def test_speed():

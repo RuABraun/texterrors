@@ -1,15 +1,19 @@
 #!/usr/bin/env python
+import csv
+import json
+import os
 import shutil
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import lru_cache
 from importlib.resources import as_file, files
 from itertools import chain
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
-import plac
 import regex as re
+import typer
 from loguru import logger
 from termcolor import colored
 from .alignment import (
@@ -182,7 +186,17 @@ class ErrorStats:
     simple_entity_count: int = 0
     simple_entity_recognized: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
     simple_entity_missed: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    simple_entity_details: List[Dict[str, str]] = field(default_factory=list)
     word_counts: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+
+
+class OutputFormat(str, Enum):
+    text = 'text'
+    json = 'json'
+
+
+def _pct(numerator, denominator):
+    return 100. * numerator / float(denominator) if denominator else 0.
 
 
 def _has_uppercase_evidence(word):
@@ -232,22 +246,78 @@ def _extract_simple_entity_words(ref_utts):
     return entity_words
 
 
-def _lowercase_utt(utt):
-    return Utt(utt.uid, StringVector([word.lower() for word in utt.words]), utt.times, utt.durs)
+def _compact_utt_text(utt, lowercase=False):
+    if lowercase:
+        return ''.join(word.lower() for word in utt.words)
+    return ''.join(utt.words)
 
 
-def _lowercase_utts(utts, oracle_wer):
-    lowered_utts = {}
-    if not oracle_wer:
-        for uttid, utt in utts.items():
-            lowered_utts[uttid] = _lowercase_utt(utt)
-        return lowered_utts
+def _extract_simple_entity_spans(utt, entity_words, lowercase=False):
+    spans = []
+    start = 0
+    for word in utt.words:
+        end = start + len(word)
+        entity_word = word.lower() if lowercase else word
+        if entity_word in entity_words:
+            spans.append((word, entity_word, start, end))
+        start = end
+    return spans
 
-    lowered_utts = defaultdict(list)
-    for uttid, utt_list in utts.items():
-        for utt in utt_list:
-            lowered_utts[uttid].append(_lowercase_utt(utt))
-    return lowered_utts
+
+def _get_aligned_ref_index_map(aligned_ref, compact_ref_len):
+    aligned_index_by_ref_char = [None] * compact_ref_len
+    ref_char_idx = 0
+    for aligned_idx, char in enumerate(aligned_ref):
+        if char == '<eps>':
+            continue
+        aligned_index_by_ref_char[ref_char_idx] = aligned_idx
+        ref_char_idx += 1
+    assert ref_char_idx == compact_ref_len
+    return aligned_index_by_ref_char
+
+
+def _score_simple_entities_without_spaces(ref_utts, hyp_utts, entity_words, error_stats):
+    error_stats.simple_entity_matches = 0
+    error_stats.simple_entity_count = 0
+    error_stats.simple_entity_recognized = defaultdict(int)
+    error_stats.simple_entity_missed = defaultdict(int)
+    error_stats.simple_entity_details = []
+
+    for uttid, ref in ref_utts.items():
+        hyp = hyp_utts.get(uttid)
+        if hyp is None:
+            continue
+
+        entity_spans = _extract_simple_entity_spans(ref, entity_words, lowercase=True)
+        if not entity_spans:
+            continue
+
+        compact_ref = _compact_utt_text(ref, lowercase=True)
+        compact_hyp = _compact_utt_text(hyp, lowercase=True)
+        aligned_ref, aligned_hyp, _ = align_texts(list(compact_ref), list(compact_hyp), use_chardiff=False)
+        aligned_ref_index_map = _get_aligned_ref_index_map(aligned_ref, len(compact_ref))
+
+        for occurrence_index, (ref_entity, entity, start, end) in enumerate(entity_spans, start=1):
+            error_stats.simple_entity_count += 1
+            aligned_start = aligned_ref_index_map[start]
+            aligned_end = aligned_ref_index_map[end - 1]
+            aligned_hyp_slice = aligned_hyp[aligned_start:aligned_end + 1]
+            matched_hyp = ''.join(char for char in aligned_hyp_slice if char != '<eps>')
+            if matched_hyp == entity:
+                error_stats.simple_entity_matches += 1
+                error_stats.simple_entity_recognized[entity] += 1
+                category = 'match'
+            else:
+                error_stats.simple_entity_missed[entity] += 1
+                category = 'deletion' if not matched_hyp else 'substitution'
+            error_stats.simple_entity_details.append({
+                'utt_id': uttid,
+                'occurrence_index': str(occurrence_index),
+                'reference_entity': ref_entity,
+                'normalized_reference_entity': entity,
+                'hypothesis_output': matched_hyp,
+                'category': category,
+            })
 
 
 def read_files(ref_f, hyp_f, isark, isctm, keywords_f, utt_group_map_f, oracle_wer):
@@ -300,6 +370,231 @@ def print_simple_entity_stats(fh, simple_entity_missed, simple_entity_recognized
     fh.write('\nRecognized Simple Entities:\n')
     for word, count in sorted(simple_entity_recognized.items(), key=lambda x: (-x[1], x[0]))[:num_top_errors]:
         fh.write(f'{word}\t{count}\n')
+
+
+def _init_group_stats(utt_group_map):
+    group_stats = {}
+    for group in set(utt_group_map.values()):
+        group_stats[group] = {'count': 0, 'errors': 0}
+    return group_stats
+
+
+def _score_outputs(ref_utts, hyp_utts, debug=False, use_chardiff=True, isctm=False, skip_detailed=False,
+                   terminal_width=None, oracle_wer=False, keywords=None, oov_set=None, cer=False,
+                   utt_group_map=None, freq_sort=False, nocolor=False, insert_tok='<eps>',
+                   simple_entity_accuracy=False, simple_entity_words=None):
+    if terminal_width is None:
+        terminal_width, _ = shutil.get_terminal_size()
+        terminal_width = 120 if terminal_width >= 120 else terminal_width
+
+    if oov_set is None:
+        oov_set = set()
+    if keywords is None:
+        keywords = set()
+    if utt_group_map is None:
+        utt_group_map = {}
+
+    if simple_entity_accuracy:
+        if simple_entity_words is None:
+            simple_entity_words = _extract_simple_entity_words(ref_utts)
+        process_line_simple_entity_words = set()
+    else:
+        simple_entity_words = set()
+        process_line_simple_entity_words = set()
+
+    group_stats = _init_group_stats(utt_group_map)
+    multilines, error_stats = process_lines(
+        ref_utts,
+        hyp_utts,
+        debug,
+        use_chardiff,
+        isctm,
+        skip_detailed,
+        terminal_width,
+        oracle_wer,
+        keywords,
+        oov_set,
+        cer,
+        utt_group_map,
+        group_stats,
+        nocolor,
+        insert_tok,
+        simple_entity_words=process_line_simple_entity_words,
+    )
+    if simple_entity_accuracy and not oracle_wer:
+        _score_simple_entities_without_spaces(ref_utts, hyp_utts, simple_entity_words, error_stats)
+    return multilines, error_stats, group_stats, keywords, oov_set
+
+
+def _build_output_summary(error_stats, group_stats, *, cer=False, simple_entity_accuracy=False,
+                          oov_set=None, keywords=None):
+    ins_count = sum(error_stats.ins.values())
+    del_count = sum(error_stats.dels.values())
+    sub_count = sum(error_stats.subs.values())
+    summary = {
+        'total_ref_words': error_stats.total_count,
+        'total_utterances': len(error_stats.utts),
+        'wrong_utterances': error_stats.utt_wrong,
+        'ins_count': ins_count,
+        'del_count': del_count,
+        'sub_count': sub_count,
+        'wer': _pct(ins_count + del_count + sub_count, error_stats.total_count),
+        'ser': _pct(error_stats.utt_wrong, len(error_stats.utts)),
+    }
+
+    if simple_entity_accuracy:
+        summary.update(
+            simple_entity_accuracy=_pct(
+                error_stats.simple_entity_matches,
+                error_stats.simple_entity_count,
+            ),
+            simple_entity_matches=error_stats.simple_entity_matches,
+            simple_entity_count=error_stats.simple_entity_count,
+        )
+    if cer:
+        summary.update(
+            cer=_pct(error_stats.char_error_count, error_stats.char_count),
+            char_error_count=error_stats.char_error_count,
+            char_count=error_stats.char_count,
+        )
+    if oov_set and error_stats.oov_word_count:
+        summary.update(
+            oov_cer=_pct(error_stats.oov_count_error, error_stats.oov_count_denom),
+            oov_wer=_pct(error_stats.oov_word_error, error_stats.oov_word_count),
+            oov_char_error_count=error_stats.oov_count_error,
+            oov_char_count=error_stats.oov_count_denom,
+            oov_word_error_count=error_stats.oov_word_error,
+            oov_word_count=error_stats.oov_word_count,
+        )
+    if keywords:
+        summary.update(
+            keyword_recall=(
+                error_stats.keywords_predicted / error_stats.keywords_count
+                if error_stats.keywords_count else -1.
+            ),
+            keyword_precision=(
+                error_stats.keywords_predicted / error_stats.keywords_output
+                if error_stats.keywords_output else -1.
+            ),
+            keyword_predicted_count=error_stats.keywords_predicted,
+            keyword_output_count=error_stats.keywords_output,
+            keyword_count=error_stats.keywords_count,
+        )
+    if group_stats:
+        summary['group_stats'] = {
+            group: {
+                'errors': stats['errors'],
+                'count': stats['count'],
+                'wer': _pct(stats['errors'], stats['count']),
+            }
+            for group, stats in group_stats.items()
+        }
+    return summary
+
+
+def _build_count_items(counts, num_top_errors, *, sort_key=None, item_builder=None, reverse=True):
+    """Convert a count mapping into a top-N JSON-friendly list with optional sorting and item shaping."""
+    if sort_key is None:
+        sort_key = lambda item: item[1]
+    if item_builder is None:
+        item_builder = lambda word, count: {'word': word, 'count': count}
+    return [
+        item_builder(word, count)
+        for word, count in sorted(counts.items(), key=sort_key, reverse=reverse)[:num_top_errors]
+    ]
+
+
+def _build_output_payload(ref_file, hyp_file, summary, error_stats, *, num_top_errors,
+                          freq_sort=False, simple_entity_accuracy=False):
+    word_counts = error_stats.word_counts
+    payload = {
+        'reference_file': str(ref_file),
+        'hypothesis_file': str(hyp_file),
+        'summary': summary,
+        'top_errors': {
+            'insertions': _build_count_items(error_stats.ins, num_top_errors),
+            'deletions': _build_count_items(
+                error_stats.dels,
+                num_top_errors,
+                sort_key=lambda item: (item[1] if not freq_sort else item[1] / word_counts[item[0]]),
+                item_builder=lambda word, count: {
+                    'word': word,
+                    'count': count,
+                    'reference_count': word_counts[word],
+                },
+            ),
+            'substitutions': _build_count_items(
+                error_stats.subs,
+                num_top_errors,
+                sort_key=lambda item: (
+                    item[1]
+                    if not freq_sort else
+                    (item[1] / word_counts[item[0].split('>')[0].strip()], item[1],)
+                ),
+                item_builder=lambda key, count: {
+                    'reference': key.split('>', maxsplit=1)[0].strip(),
+                    'hypothesis': key.split('>', maxsplit=1)[1],
+                    'count': count,
+                    'reference_count': word_counts[key.split('>', maxsplit=1)[0].strip()],
+                },
+            ),
+        },
+    }
+    if simple_entity_accuracy:
+        payload['simple_entities'] = {
+            'missed': _build_count_items(
+                error_stats.simple_entity_missed,
+                num_top_errors,
+                sort_key=lambda item: (-item[1], item[0]),
+                reverse=False,
+            ),
+            'recognized': _build_count_items(
+                error_stats.simple_entity_recognized,
+                num_top_errors,
+                sort_key=lambda item: (-item[1], item[0]),
+                reverse=False,
+            ),
+        }
+    return payload
+
+
+def _write_json_payload(fh, payload):
+    json.dump(payload, fh, indent=2)
+    fh.write('\n')
+
+
+SIMPLE_ENTITY_DETAIL_COLUMNS = [
+    'reference_file',
+    'hypothesis_file',
+    'utt_id',
+    'occurrence_index',
+    'reference_entity',
+    'normalized_reference_entity',
+    'hypothesis_output',
+    'category',
+]
+
+
+def _add_simple_entity_detail_file_info(ref_file, hyp_file, rows):
+    return [
+        {
+            'reference_file': str(ref_file),
+            'hypothesis_file': str(hyp_file),
+            **row,
+        }
+        for row in rows
+    ]
+
+
+def _write_simple_entity_details_tsv(fh, rows):
+    writer = csv.DictWriter(
+        fh,
+        fieldnames=SIMPLE_ENTITY_DETAIL_COLUMNS,
+        delimiter='\t',
+        lineterminator='\n',
+    )
+    writer.writeheader()
+    writer.writerows(rows)
 
 
 def process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
@@ -598,42 +893,174 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
                          error_stats_hypa_hypb.word_counts)
 
 
+def _format_comparison_value(value, decimals=1):
+    if value is None:
+        return '-'
+    return f'{value:.{decimals}f}'
+
+
+def _write_comparison_table(fh, rows, *, include_cer=False, include_simple_entity_accuracy=False,
+                            include_oov=False, include_keywords=False):
+    headers = ['file', 'WER', 'SER']
+    if include_cer:
+        headers.append('CER')
+    if include_simple_entity_accuracy:
+        headers.append('SimpleEntityAcc')
+    if include_oov:
+        headers.extend(['OOV CER', 'OOV WER'])
+    if include_keywords:
+        headers.extend(['Keyword Recall', 'Keyword Precision'])
+
+    fh.write('Comparison:\n')
+    fh.write('\t'.join(headers) + '\n')
+    for row in rows:
+        summary = row['summary']
+        values = [row['file'], _format_comparison_value(summary.get('wer')), _format_comparison_value(summary.get('ser'))]
+        if include_cer:
+            values.append(_format_comparison_value(summary.get('cer')))
+        if include_simple_entity_accuracy:
+            values.append(_format_comparison_value(summary.get('simple_entity_accuracy')))
+        if include_oov:
+            values.append(_format_comparison_value(summary.get('oov_cer')))
+            values.append(_format_comparison_value(summary.get('oov_wer')))
+        if include_keywords:
+            values.append(_format_comparison_value(summary.get('keyword_recall'), decimals=2))
+            values.append(_format_comparison_value(summary.get('keyword_precision'), decimals=2))
+        fh.write('\t'.join(values) + '\n')
+
+
+def process_multiple_hyp_outputs(ref_utts, hyp_entries, fh, ref_file, cer=False, num_top_errors=10, oov_set=None,
+                                 debug=False, use_chardiff=True, isctm=False, skip_detailed=False,
+                                 keywords=None, utt_group_map=None, freq_sort=False, nocolor=False,
+                                 insert_tok='<eps>', terminal_width=None, simple_entity_accuracy=False,
+                                 output_format=OutputFormat.text, simple_entity_details_fh=None):
+    rows = []
+    simple_entity_detail_rows = []
+    simple_entity_words = _extract_simple_entity_words(ref_utts) if simple_entity_accuracy else None
+    for hyp_file, hyp_utts in hyp_entries:
+        _, error_stats, group_stats, normalized_keywords, normalized_oov_set = _score_outputs(
+            ref_utts,
+            hyp_utts,
+            debug=debug,
+            use_chardiff=use_chardiff,
+            isctm=isctm,
+            skip_detailed=True,
+            terminal_width=terminal_width,
+            oracle_wer=False,
+            keywords=keywords,
+            oov_set=oov_set,
+            cer=cer,
+            utt_group_map=utt_group_map,
+            freq_sort=freq_sort,
+            nocolor=nocolor,
+            insert_tok=insert_tok,
+            simple_entity_accuracy=simple_entity_accuracy,
+            simple_entity_words=simple_entity_words,
+        )
+        payload = _build_output_payload(
+            ref_file,
+            hyp_file,
+            _build_output_summary(
+                error_stats,
+                group_stats,
+                cer=cer,
+                simple_entity_accuracy=simple_entity_accuracy,
+                oov_set=normalized_oov_set,
+                keywords=normalized_keywords,
+            ),
+            error_stats,
+            num_top_errors=num_top_errors,
+            freq_sort=freq_sort,
+            simple_entity_accuracy=simple_entity_accuracy,
+        )
+        if simple_entity_details_fh is not None:
+            simple_entity_detail_rows.extend(
+                _add_simple_entity_detail_file_info(ref_file, hyp_file, error_stats.simple_entity_details)
+            )
+        rows.append({
+            'file': hyp_file,
+            'summary': payload['summary'],
+            'payload': payload,
+            'hyp_utts': hyp_utts,
+        })
+
+    if simple_entity_details_fh is not None:
+        _write_simple_entity_details_tsv(simple_entity_details_fh, simple_entity_detail_rows)
+
+    if output_format == OutputFormat.json:
+        _write_json_payload(
+            fh,
+            {
+                'reference_file': str(ref_file),
+                'outputs': [row['payload'] for row in rows],
+            },
+        )
+        return
+
+    _write_comparison_table(
+        fh,
+        rows,
+        include_cer=cer,
+        include_simple_entity_accuracy=simple_entity_accuracy,
+        include_oov=bool(oov_set),
+        include_keywords=bool(keywords),
+    )
+
+    if skip_detailed:
+        return
+
+    for row in rows:
+        fh.write(f'\n\nResults with file {row["file"]}\n')
+        process_output(
+            ref_utts,
+            row['hyp_utts'],
+            fh,
+            ref_file=ref_file,
+            hyp_file=row['file'],
+            cer=cer,
+            num_top_errors=num_top_errors,
+            oov_set=oov_set,
+            debug=debug,
+            use_chardiff=use_chardiff,
+            isctm=isctm,
+            skip_detailed=False,
+            keywords=keywords,
+            utt_group_map=utt_group_map,
+            oracle_wer=False,
+            freq_sort=freq_sort,
+            nocolor=nocolor,
+            insert_tok=insert_tok,
+            terminal_width=terminal_width,
+            simple_entity_accuracy=simple_entity_accuracy,
+        )
+
+
 def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_top_errors=10, oov_set=None, debug=False,
                   use_chardiff=True, isctm=False, skip_detailed=False,
                   keywords=None, utt_group_map=None, oracle_wer=False,
                   freq_sort=False, nocolor=False, insert_tok='<eps>', terminal_width=None,
-                  simple_entity_accuracy=False):
- 
-    if terminal_width is None:
-        terminal_width, _ = shutil.get_terminal_size()
-        terminal_width = 120 if terminal_width >= 120 else terminal_width
+                  simple_entity_accuracy=False, output_format=OutputFormat.text, simple_entity_details_fh=None):
+    effective_skip_detailed = skip_detailed or output_format == OutputFormat.json
+    multilines, error_stats, group_stats, keywords, oov_set = _score_outputs(
+        ref_utts,
+        hyp_utts,
+        debug=debug,
+        use_chardiff=use_chardiff,
+        isctm=isctm,
+        skip_detailed=effective_skip_detailed,
+        terminal_width=terminal_width,
+        oracle_wer=oracle_wer,
+        keywords=keywords,
+        oov_set=oov_set,
+        cer=cer,
+        utt_group_map=utt_group_map,
+        freq_sort=freq_sort,
+        nocolor=nocolor,
+        insert_tok=insert_tok,
+        simple_entity_accuracy=simple_entity_accuracy,
+    )
 
-    if oov_set is None:
-        oov_set = set()
-    if keywords is None:
-        keywords = set()
-    if utt_group_map is None:
-        utt_group_map = {}
-    simple_entity_words = set()
-    if simple_entity_accuracy:
-        simple_entity_words = _extract_simple_entity_words(ref_utts)
-        ref_utts = _lowercase_utts(ref_utts, oracle_wer=False)
-        hyp_utts = _lowercase_utts(hyp_utts, oracle_wer=oracle_wer)
-        oov_set = {word.lower() for word in oov_set}
-        keywords = {word.lower() for word in keywords}
-
-    group_stats = {}
-    groups = set(utt_group_map.values())
-    for group in groups:
-        group_stats[group] = {}
-        group_stats[group]['count'] = 0
-        group_stats[group]['errors'] = 0
-
-    multilines, error_stats = process_lines(ref_utts, hyp_utts, debug, use_chardiff, isctm, skip_detailed,
-                  terminal_width, oracle_wer, keywords, oov_set, cer,
-                  utt_group_map, group_stats, nocolor, insert_tok, simple_entity_words=simple_entity_words)
-
-    if not skip_detailed and not oracle_wer:
+    if not effective_skip_detailed and not oracle_wer:
         if nocolor:
             fh.write(f'\"{ref_file}\" is treated as reference, \"{hyp_file}\" as hypothesis. Errors are capitalized.\n')
         else:
@@ -649,49 +1076,84 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
         s = sum(v for v in chain(error_stats.ins.values(), error_stats.dels.values(), error_stats.subs.values()))
         assert s == error_stats.total_cost, f'{s} {error_stats.total_cost}'
     if oracle_wer:
+        if output_format == OutputFormat.json:
+            _write_json_payload(
+                fh,
+                {
+                    'reference_file': str(ref_file),
+                    'hypothesis_file': str(hyp_file),
+                    'summary': {
+                        'oracle_wer': error_stats.total_cost / error_stats.total_count,
+                        'total_ref_words': error_stats.total_count,
+                    },
+                },
+            )
+            return
         fh.write(f'Oracle WER: {error_stats.total_cost / error_stats.total_count}\n')
         return
 
-    # Outputting metrics from gathered statistics.
-    ins_count = sum(error_stats.ins.values())
-    del_count = sum(error_stats.dels.values())
-    sub_count = sum(error_stats.subs.values())
-    wer = (ins_count + del_count + sub_count) / float(error_stats.total_count)
-    if not skip_detailed:
+    summary = _build_output_summary(
+        error_stats,
+        group_stats,
+        cer=cer,
+        simple_entity_accuracy=simple_entity_accuracy,
+        oov_set=oov_set,
+        keywords=keywords,
+    )
+    if simple_entity_details_fh is not None:
+        _write_simple_entity_details_tsv(
+            simple_entity_details_fh,
+            _add_simple_entity_detail_file_info(ref_file, hyp_file, error_stats.simple_entity_details),
+        )
+    if output_format == OutputFormat.json:
+        _write_json_payload(
+            fh,
+            _build_output_payload(
+                ref_file,
+                hyp_file,
+                summary,
+                error_stats,
+                num_top_errors=num_top_errors,
+                freq_sort=freq_sort,
+                simple_entity_accuracy=simple_entity_accuracy,
+            ),
+        )
+        return
+
+    if not effective_skip_detailed:
         fh.write('\n')
-    fh.write(f'WER: {100.*wer:.1f} (ins {ins_count}, del {del_count}, sub {sub_count} / {error_stats.total_count})'
-             f'\nSER: {100.*error_stats.utt_wrong / len(error_stats.utts):.1f}\n')
+    fh.write(
+        f'WER: {summary["wer"]:.1f} '
+        f'(ins {summary["ins_count"]}, del {summary["del_count"]}, sub {summary["sub_count"]} / {error_stats.total_count})'
+        f'\nSER: {summary["ser"]:.1f}\n'
+    )
 
     if simple_entity_accuracy:
-        simple_entity_accuracy_value = (
-            error_stats.simple_entity_matches / error_stats.simple_entity_count
-            if error_stats.simple_entity_count else 0.
-        )
         fh.write(
-            f'Simple Entity Accuracy: {100.*simple_entity_accuracy_value:.1f} '
+            f'Simple Entity Accuracy: {summary["simple_entity_accuracy"]:.1f} '
             f'({error_stats.simple_entity_matches} / {error_stats.simple_entity_count})\n'
         )
 
-    if cer:
-        cer = error_stats.char_error_count / float(error_stats.char_count)
-        fh.write(f'CER: {100.*cer:.1f} ({error_stats.char_error_count} / {error_stats.char_count})\n')
+    if 'cer' in summary:
+        fh.write(f'CER: {summary["cer"]:.1f} ({error_stats.char_error_count} / {error_stats.char_count})\n')
     if oov_set:
         if error_stats.oov_word_count:
-            fh.write(f'OOV CER: {100.*error_stats.oov_count_error / error_stats.oov_count_denom:.1f}\n')
-            fh.write(f'OOV WER: {100.*error_stats.oov_word_error / error_stats.oov_word_count:.1f}\n')
+            fh.write(f'OOV CER: {summary["oov_cer"]:.1f}\n')
+            fh.write(f'OOV WER: {summary["oov_wer"]:.1f}\n')
         else:
             logger.error('None of the words in the OOV list file were found in the reference!')
     if keywords:
-        fh.write(f'Keyword results - recall {error_stats.keywords_predicted / error_stats.keywords_count if error_stats.keywords_count else -1:.2f} '
-                 f'- precision {error_stats.keywords_predicted / error_stats.keywords_output if error_stats.keywords_output else -1:.2f}\n')
+        fh.write(
+            f'Keyword results - recall {summary["keyword_recall"]:.2f} '
+            f'- precision {summary["keyword_precision"]:.2f}\n'
+        )
     if utt_group_map:
         fh.write('Group WERs:\n')
-        for group, stats in group_stats.items():
-            wer = 100. * (stats['errors'] / float(stats['count']))
-            fh.write(f'{group}\t{wer:.1f}\n')
+        for group, stats in summary.get('group_stats', {}).items():
+            fh.write(f'{group}\t{stats["wer"]:.1f}\n')
         fh.write('\n')
 
-    if not skip_detailed:
+    if not effective_skip_detailed:
         print_detailed_stats(fh, error_stats.ins, error_stats.dels, error_stats.subs, num_top_errors, freq_sort,
                              error_stats.word_counts)
         if simple_entity_accuracy:
@@ -704,74 +1166,271 @@ def process_output(ref_utts, hyp_utts, fh, ref_file, hyp_file, cer=False, num_to
 
 
 def main(
-    ref_file: 'Reference text',
-    hyp_file: 'Hypothesis text',
-    outf: 'Optional output file' = '',
-    oov_list_f: ('List of OOVs', 'option', None) = '',
-    isark: ('Text files start with utterance ID.', 'flag')=False,
-    isctm: ('Text files start with utterance ID and end with word, time, duration', 'flag')=False,
-    use_chardiff: ('Use character lev distance for better alignment in exchange for slightly higher WER.', 'flag') = False,
-    cer: ('Calculate CER', 'flag')=False,
-    debug: ('Print debug messages, will write cost matrix to summedcost.', 'flag', 'd')=False,
-    skip_detailed: ('No per utterance output', 'flag', 's') = False,
-    keywords_f: ('Will filter out non keyword reference words.', 'option', None) = '',
-    freq_sort: ('Turn on sorting del/sub errors by frequency (default is by count).', 'flag', None) = False,
-    oracle_wer: ('Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER.', 'flag', None) = False,
-    utt_group_map_f: ('Should be a file which maps uttids to group, WER will be output per group.', 'option', '') = '',
-    usecolor: ('Show detailed output with color (use less -R). Red/white is reference, Green/white model output.', 'flag', 'c')=False,
-    num_top_errors: ('Number of errors to show per type in detailed output.', 'option')=10,
-    second_hyp_f: ('Will compare outputs between two hypothesis files.', 'option')='',
-    simple_entity_accuracy: ('Use simple entity accuracy from reference-side casing cues.', 'flag', 'w') = False,
+    ref_file: str,
+    hyp_file: str,
+    outf: str = '',
+    oov_list_f: str = '',
+    isark: bool = False,
+    isctm: bool = False,
+    use_chardiff: bool = False,
+    cer: bool = False,
+    debug: bool = False,
+    skip_detailed: bool = False,
+    keywords_f: str = '',
+    freq_sort: bool = False,
+    oracle_wer: bool = False,
+    utt_group_map_f: str = '',
+    usecolor: bool = False,
+    num_top_errors: int = 10,
+    second_hyp_f: str = '',
+    simple_entity_accuracy: bool = False,
+    simple_entity_details_out: str = '',
+    output_format: str = 'text',
     ):
+    hyp_files = [hyp_file]
+    if second_hyp_f:
+        hyp_files.append(second_hyp_f)
+    _run_cli(
+        ref_file=ref_file,
+        hyp_files=hyp_files,
+        outf=outf,
+        oov_list_f=oov_list_f,
+        isark=isark,
+        isctm=isctm,
+        use_chardiff=use_chardiff,
+        cer=cer,
+        debug=debug,
+        skip_detailed=skip_detailed,
+        keywords_f=keywords_f,
+        freq_sort=freq_sort,
+        oracle_wer=oracle_wer,
+        utt_group_map_f=utt_group_map_f,
+        usecolor=usecolor,
+        num_top_errors=num_top_errors,
+        simple_entity_accuracy=simple_entity_accuracy,
+        output_format=output_format,
+        simple_entity_details_out=simple_entity_details_out,
+    )
+
+
+def _load_oov_set(oov_list_f, use_chardiff):
+    oov_set = set()
+    if oov_list_f:
+        if not use_chardiff:
+            logger.warning('Because you are using standard alignment (not `-use_chardiff`) the alignments could be suboptimal\n'
+                           ' which will lead to the OOV-CER being slightly wrong. Use `-use_chardiff` for better alignment, ctm based for the best.')
+        with open(oov_list_f) as fh_oov:
+            for line in fh_oov:
+                oov_set.add(line.split()[0])
+    return oov_set
+
+
+def _old_interface_message(ref_file, hyp_files, outf_candidate):
+    hyp_args = ' '.join(hyp_files[:-1]) if len(hyp_files) > 1 else hyp_files[0]
+    return (
+        f'Input file not found: {outf_candidate}\n'
+        'It looks like you may be using the old CLI interface where the output file was positional.\n'
+        f'Use -o/--out instead, for example:\n  texterrors {ref_file} {hyp_args} -o {outf_candidate}\n'
+        'If this was meant to be a hypothesis file, check that the path exists.'
+    )
+
+
+def _validate_cli_paths(ref_file, hyp_files, outf):
+    if not os.path.exists(ref_file):
+        raise typer.BadParameter(f'Input file not found: {ref_file}', param_hint='ref_file')
+    if len(hyp_files) > 1 and not outf and not os.path.exists(hyp_files[-1]):
+        raise typer.BadParameter(_old_interface_message(ref_file, hyp_files, hyp_files[-1]), param_hint='hyp_files')
+    for hyp_file in hyp_files:
+        if not os.path.exists(hyp_file):
+            raise typer.BadParameter(f'Input file not found: {hyp_file}', param_hint='hyp_files')
+
+
+def _read_keyword_file(keywords_f):
+    keywords = set()
+    if keywords_f:
+        for line in open(keywords_f):
+            assert len(line.split()) == 1, 'A keyword must be a single word!'
+            keywords.add(line.strip())
+    return keywords
+
+
+def _read_utt_group_map(utt_group_map_f):
+    utt_group_map = {}
+    if utt_group_map_f:
+        for line in open(utt_group_map_f):
+            uttid, group = line.split(maxsplit=1)
+            utt_group_map[uttid] = group.strip()
+    return utt_group_map
+
+
+def _validate_cli_options(hyp_files, isark, isctm, oracle_wer, simple_entity_details_out):
+    if not oracle_wer:
+        return
+    if len(hyp_files) != 1:
+        raise typer.BadParameter('Oracle WER mode only supports a single hypothesis input.', param_hint='hyp_files')
+    if not isark or isctm:
+        raise typer.BadParameter('Oracle WER requires `--isark` and does not support `--isctm`.')
+    if simple_entity_details_out:
+        raise typer.BadParameter(
+            '`--entity-details` is not supported with `--oracle-wer`.',
+            param_hint='simple_entity_details_out',
+        )
+
+
+def _run_cli(ref_file, hyp_files, outf='', oov_list_f='', isark=False, isctm=False,
+             use_chardiff=False, cer=False, debug=False, skip_detailed=False, keywords_f='',
+             freq_sort=False, oracle_wer=False, utt_group_map_f='', usecolor=False,
+             num_top_errors=10, simple_entity_accuracy=False, output_format=OutputFormat.text,
+             simple_entity_details_out=''):
+    """Execute the CLI request after argument parsing.
+
+    This indirection keeps the Typer command thin and declarative while putting the
+    actual branching and file-handling logic in one testable function.
+    """
+    output_format = OutputFormat(output_format)
+    _validate_cli_paths(ref_file, hyp_files, outf)
+    if simple_entity_details_out:
+        simple_entity_accuracy = True
+    _validate_cli_options(hyp_files, isark, isctm, oracle_wer, simple_entity_details_out)
 
     logger.remove()
-    if debug:
-        logger.add(sys.stderr, level="DEBUG")
-    else:
-        logger.add(sys.stderr, level="INFO")
+    logger.add(sys.stderr, level='DEBUG' if debug else 'INFO')
 
-    if outf:
-        fh = open(outf, 'w')
-    else:
-        fh = sys.stdout
-    if not second_hyp_f:
+    fh = open(outf, 'w') if outf else sys.stdout
+    simple_entity_details_fh = open(simple_entity_details_out, 'w') if simple_entity_details_out else None
+    try:
         if oracle_wer:
-            assert isark and not isctm
             skip_detailed = True
             if use_chardiff:
-                logger.warning(f'You probably would prefer running without `-use_chardiff`, the WER will be slightly better for the cost of a worse alignment')
+                logger.warning('You probably would prefer running without `-use_chardiff`, the WER will be slightly better for the cost of a worse alignment')
 
-        oov_set = set()
-        if oov_list_f:
-            if not use_chardiff:
-                logger.warning('Because you are using standard alignment (not `-use_chardiff`) the alignments could be suboptimal\n'
-                               ' which will lead to the OOV-CER being slightly wrong. Use `-use_chardiff` for better alignment, ctm based for the best.')
-            with open(oov_list_f) as fh_oov:
-                for line in fh_oov:
-                    oov_set.add(line.split()[0])  # splitting incase line contains another entry (for example count)
+        oov_set = _load_oov_set(oov_list_f, use_chardiff)
 
-        ref_utts, hyp_utts, keywords, utt_group_map = read_files(ref_file,
-            hyp_file, isark, isctm, keywords_f, utt_group_map_f, oracle_wer)
+        if len(hyp_files) == 1:
+            ref_utts, hyp_utts, keywords, utt_group_map = read_files(
+                ref_file,
+                hyp_files[0],
+                isark,
+                isctm,
+                keywords_f,
+                utt_group_map_f,
+                oracle_wer,
+            )
+            process_output(
+                ref_utts,
+                hyp_utts,
+                fh,
+                cer=cer,
+                debug=debug,
+                oov_set=oov_set,
+                ref_file=ref_file,
+                hyp_file=hyp_files[0],
+                use_chardiff=use_chardiff,
+                skip_detailed=skip_detailed,
+                keywords=keywords,
+                utt_group_map=utt_group_map,
+                freq_sort=freq_sort,
+                isctm=isctm,
+                oracle_wer=oracle_wer,
+                nocolor=not usecolor,
+                num_top_errors=num_top_errors,
+                simple_entity_accuracy=simple_entity_accuracy,
+                output_format=output_format,
+                simple_entity_details_fh=simple_entity_details_fh,
+            )
+            return
 
-        process_output(ref_utts, hyp_utts, fh, cer=cer, debug=debug, oov_set=oov_set,
-                     ref_file=ref_file, hyp_file=hyp_file, use_chardiff=use_chardiff, skip_detailed=skip_detailed,
-                     keywords=keywords, utt_group_map=utt_group_map, freq_sort=freq_sort,
-                     isctm=isctm, oracle_wer=oracle_wer, nocolor=not usecolor, num_top_errors=num_top_errors,
-                     simple_entity_accuracy=simple_entity_accuracy)
-    else:
-        ref_utts = read_ref_file(ref_file, isark)
-        hyp_uttsa = read_hyp_file(hyp_file, isark, False)
-        hyp_uttsb = read_hyp_file(second_hyp_f, isark, False)
+        ref_utts = read_ref_file(ref_file, isark) if not isctm else read_ctm_file(ref_file)
+        keywords = _read_keyword_file(keywords_f)
+        utt_group_map = _read_utt_group_map(utt_group_map_f)
 
-        process_multiple_outputs(ref_utts, hyp_uttsa, hyp_uttsb, fh, num_top_errors,
-                                 use_chardiff, freq_sort, ref_file, hyp_file, second_hyp_f, usecolor=usecolor)
+        hyp_entries = []
+        for hyp_file in hyp_files:
+            hyp_utts = read_hyp_file(hyp_file, isark, False) if not isctm else read_ctm_file(hyp_file)
+            hyp_entries.append((hyp_file, hyp_utts))
 
-    fh.close()
+        process_multiple_hyp_outputs(
+            ref_utts,
+            hyp_entries,
+            fh,
+            ref_file=ref_file,
+            cer=cer,
+            num_top_errors=num_top_errors,
+            oov_set=oov_set,
+            debug=debug,
+            use_chardiff=use_chardiff,
+            isctm=isctm,
+            skip_detailed=skip_detailed,
+            keywords=keywords,
+            utt_group_map=utt_group_map,
+            freq_sort=freq_sort,
+            nocolor=not usecolor,
+            simple_entity_accuracy=simple_entity_accuracy,
+            output_format=output_format,
+            simple_entity_details_fh=simple_entity_details_fh,
+        )
+    finally:
+        if simple_entity_details_fh is not None:
+            simple_entity_details_fh.close()
+        if fh is not sys.stdout:
+            fh.close()
 
 
-def cli():  # entrypoint used in setup.py
-    plac.call(main)
+app = typer.Typer(
+    add_completion=False,
+    context_settings={'help_option_names': ['-h', '--help']},
+    pretty_exceptions_enable=False,
+)
+
+
+@app.command()
+def run(
+    ref_file: str = typer.Argument(..., help='Reference text.'),
+    hyp_files: List[str] = typer.Argument(..., help='One or more hypothesis files.'),
+    out: Optional[str] = typer.Option(None, '--out', '-o', help='Optional output file.'),
+    oov_list_f: str = typer.Option('', '--oov-list-f', help='List of OOVs.'),
+    isark: bool = typer.Option(False, '--isark', help='Text files start with utterance ID.'),
+    isctm: bool = typer.Option(False, '--isctm', help='Text files start with utterance ID and end with word, time, duration.'),
+    use_chardiff: bool = typer.Option(False, '--use-chardiff', help='Use character lev distance for better alignment in exchange for slightly higher WER.'),
+    cer: bool = typer.Option(False, '--cer', help='Calculate CER.'),
+    debug: bool = typer.Option(False, '--debug', '-d', help='Print debug messages, will write cost matrix to summedcost.'),
+    skip_detailed: bool = typer.Option(False, '--skip-detailed', '-s', help='No per utterance output.'),
+    keywords_f: str = typer.Option('', '--keywords-f', '--keywords-list-f', help='Will filter out non keyword reference words.'),
+    freq_sort: bool = typer.Option(False, '--freq-sort', help='Turn on sorting del/sub errors by frequency (default is by count).'),
+    oracle_wer: bool = typer.Option(False, '--oracle-wer', help='Hyp file should have multiple hypothesis per utterance, lowest edit distance will be used for WER.'),
+    utt_group_map_f: str = typer.Option('', '--utt-group-map', '--utt-group-map-f', help='Should be a file which maps uttids to group, WER will be output per group.'),
+    usecolor: bool = typer.Option(False, '--usecolor', '-c', help='Show detailed output with color (use less -R). Red/white is reference, Green/white model output.'),
+    num_top_errors: int = typer.Option(10, '--num-top-errors', help='Number of errors to show per type in detailed output.'),
+    simple_entity_accuracy: bool = typer.Option(False, '--simple-entity-accuracy', '-w', help='Use simple entity accuracy from reference-side casing cues, matching with whitespace ignored.'),
+    simple_entity_details_out: str = typer.Option('', '--entity-details', help='Optional TSV file with one row per entity occurrence and normalized compact model output.'),
+    output_format: OutputFormat = typer.Option(OutputFormat.text, '--output-format', help='Output format. JSON contains only aggregate statistics and top-error summaries.'),
+):
+    _run_cli(
+        ref_file=ref_file,
+        hyp_files=hyp_files,
+        outf=out or '',
+        oov_list_f=oov_list_f,
+        isark=isark,
+        isctm=isctm,
+        use_chardiff=use_chardiff,
+        cer=cer,
+        debug=debug,
+        skip_detailed=skip_detailed,
+        keywords_f=keywords_f,
+        freq_sort=freq_sort,
+        oracle_wer=oracle_wer,
+        utt_group_map_f=utt_group_map_f,
+        usecolor=usecolor,
+        num_top_errors=num_top_errors,
+        simple_entity_accuracy=simple_entity_accuracy,
+        output_format=output_format,
+        simple_entity_details_out=simple_entity_details_out,
+    )
+
+
+def cli():
+    app()
 
 
 if __name__ == "__main__":
-    plac.call(main)
+    cli()
