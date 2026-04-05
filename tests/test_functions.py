@@ -5,6 +5,7 @@ import os
 import io
 import time
 import sys
+import re
 from loguru import logger
 
 import Levenshtein as levd
@@ -18,6 +19,12 @@ from typer.testing import CliRunner
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 runner = CliRunner()
+
+ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
+
+
+def strip_ansi(text):
+    return ANSI_ESCAPE_RE.sub('', text)
 
 def show_diff(text1, text2):
     # Split the strings into lines to compare them line by line
@@ -715,9 +722,10 @@ def test_cli_warns_on_old_positional_output_interface(tmp_path):
     hyp_f.write_text('1 hello world\n')
 
     result = runner.invoke(texterrors.app, ['--isark', str(ref_f), str(hyp_f), str(out_f)])
+    output = strip_ansi(result.output)
     assert result.exit_code != 0
-    assert 'old CLI interface' in result.output
-    assert '-o/--out' in result.output
+    assert 'old CLI interface' in output
+    assert '-o/--out' in output
 
 
 def test_cli_rejects_entity_details_with_oracle_wer(tmp_path):
@@ -732,9 +740,10 @@ def test_cli_rejects_entity_details_with_oracle_wer(tmp_path):
         texterrors.app,
         ['--isark', '--oracle-wer', '--entity-details', str(details_f), str(ref_f), str(hyp_f)],
     )
+    output = strip_ansi(result.output)
     assert result.exit_code != 0
-    assert '--entity-details' in result.output
-    assert '--oracle-wer' in result.output
+    assert '--entity-details' in output
+    assert '--oracle-wer' in output
 
 
 def test_speed():
