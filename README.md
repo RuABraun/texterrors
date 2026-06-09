@@ -24,6 +24,10 @@ For more background on the motivation for the tool, see [this post](https://ruab
 
 # Changelog
 
+## 1.1.8
+
+- Fixed side-by-side output when a hypothesis file is missing an utterance by skipping incomplete utterances before alignment merging.
+
 ## 1.1.7
 
 - Restored the two-hypothesis per-utterance comparison view behind `--side-by-side` / `-y`.

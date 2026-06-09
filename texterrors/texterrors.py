@@ -841,19 +841,34 @@ def process_multiple_outputs(ref_utts, hypa_utts, hypb_utts, fh, num_top_errors,
         terminal_width, _ = shutil.get_terminal_size()
         terminal_width = 120 if terminal_width >= 120 else terminal_width
 
+    complete_utts = []
+    for utt in ref_utts:
+        if utt not in hypa_utts or utt not in hypb_utts:
+            continue
+        complete_utts.append(utt)
+
+    ref_utts = {utt: ref_utts[utt] for utt in complete_utts}
+    hypa_utts = {utt: hypa_utts[utt] for utt in complete_utts}
+    hypb_utts = {utt: hypb_utts[utt] for utt in complete_utts}
+
+    fh.write(f'Per utt details, order is \"{ref_file}\", \"{file_a}\", \"{file_b}\":\n')
+    if not ref_utts:
+        fh.write('No utterances were present in the reference and both hypothesis files.\n')
+        return
+
     multilines_ref_hypa, error_stats_ref_hypa = process_lines(ref_utts, hypa_utts, False, use_chardiff, False,
                                             False, terminal_width, False, [], [], False,
-                                            None, None, nocolor=False, insert_tok='<eps>',fullprint=True)
+                                            None, None, nocolor=False, insert_tok='<eps>', fullprint=True)
     multilines_ref_hypb, error_stats_ref_hypb = process_lines(ref_utts, hypb_utts, False, use_chardiff, False,
                                                               False, terminal_width, False, [], [], False,
-                                                              None, None, nocolor=False, insert_tok='<eps>', fullprint=True)
+                                                              None, None, nocolor=False, insert_tok='<eps>',
+                                                              fullprint=True)
     _, error_stats_hypa_hypb = process_lines(hypa_utts, hypb_utts, False, use_chardiff, False,
                                                               True, terminal_width, False, [], [], False,
                                                               None, None, nocolor=True, insert_tok='<eps>')
 
     merged_multiline = _merge_multilines(multilines_ref_hypa, multilines_ref_hypb,
                                          terminal_width, usecolor)
-    fh.write(f'Per utt details, order is \"{ref_file}\", \"{file_a}\", \"{file_b}\":\n')
     for utt, multiline in zip(error_stats_ref_hypa.utts, merged_multiline):
         fh.write(f'{utt}\n')
         for lines in multiline.iter_construct():

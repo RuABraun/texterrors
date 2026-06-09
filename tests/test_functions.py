@@ -529,6 +529,49 @@ ist'>ok\t1\t1
     assert ref == output, show_diff(ref, output)
 
 
+def test_process_output_multi_skips_utterance_missing_from_one_hypothesis():
+    reflines = [
+        '1 hello world',
+        '2 goodbye moon',
+        '3 last one',
+    ]
+    hypalines = [
+        '1 hello word',
+        '2 goodbye moon',
+        '3 last one',
+    ]
+    hypblines = [
+        '1 hello world',
+        '3 last wrong',
+    ]
+    refs = create_inp(reflines)
+    hypa = create_inp(hypalines)
+    hypb = create_inp(hypblines)
+
+    buffer = io.StringIO()
+    texterrors.process_multiple_outputs(
+        refs,
+        hypa,
+        hypb,
+        buffer,
+        10,
+        False,
+        False,
+        'ref',
+        'hypa',
+        'hypb',
+        terminal_width=180,
+        usecolor=False,
+    )
+    output = buffer.getvalue()
+
+    assert '\n1\n' in output
+    assert '\n3\n' in output
+    assert '\n2\n' not in output
+    assert 'goodbye moon' not in output
+    assert output.count('WER: 25.0 (ins 0, del 0, sub 1 / 4)') == 2
+
+
 def test_process_output_colored():
     reflines = ['1 den asu flash würde es sonst auch in allen drei sch- in allen drei sprachen ist der verfügbar ähm jetzt für uns habe ich gedacht reicht es ja auf deutsch he']
     hyplines = ['1 ah der anzug fleisch würde sonst auch in allen drei ist in allen drei sprachen verfügbar ähm jetzt für uns habe ich gedacht reicht sie auch auf deutsch he']
