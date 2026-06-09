@@ -1186,6 +1186,7 @@ def main(
     simple_entity_accuracy: bool = False,
     simple_entity_details_out: str = '',
     output_format: str = 'text',
+    side_by_side: bool = False,
     ):
     hyp_files = [hyp_file]
     if second_hyp_f:
@@ -1210,6 +1211,7 @@ def main(
         simple_entity_accuracy=simple_entity_accuracy,
         output_format=output_format,
         simple_entity_details_out=simple_entity_details_out,
+        side_by_side=side_by_side,
     )
 
 
@@ -1263,7 +1265,27 @@ def _read_utt_group_map(utt_group_map_f):
     return utt_group_map
 
 
-def _validate_cli_options(hyp_files, isark, isctm, oracle_wer, simple_entity_details_out):
+def _validate_cli_options(hyp_files, isark, isctm, oracle_wer, simple_entity_details_out,
+                          side_by_side, output_format, skip_detailed, cer, oov_list_f,
+                          keywords_f, utt_group_map_f, simple_entity_accuracy):
+    if side_by_side:
+        if len(hyp_files) != 2:
+            raise typer.BadParameter(
+                '`--side-by-side` requires exactly two hypothesis inputs.',
+                param_hint='hyp_files',
+            )
+        if output_format != OutputFormat.text:
+            raise typer.BadParameter(
+                '`--side-by-side` only supports text output.',
+                param_hint='output_format',
+            )
+        if (isctm or skip_detailed or cer or oov_list_f or keywords_f or oracle_wer or
+                utt_group_map_f or simple_entity_accuracy or simple_entity_details_out):
+            raise typer.BadParameter(
+                '`--side-by-side` cannot be combined with other scoring or output-mode options.',
+                param_hint='side_by_side',
+            )
+
     if not oracle_wer:
         return
     if len(hyp_files) != 1:
@@ -1281,7 +1303,7 @@ def _run_cli(ref_file, hyp_files, outf='', oov_list_f='', isark=False, isctm=Fal
              use_chardiff=False, cer=False, debug=False, skip_detailed=False, keywords_f='',
              freq_sort=False, oracle_wer=False, utt_group_map_f='', usecolor=False,
              num_top_errors=10, simple_entity_accuracy=False, output_format=OutputFormat.text,
-             simple_entity_details_out=''):
+             simple_entity_details_out='', side_by_side=False):
     """Execute the CLI request after argument parsing.
 
     This indirection keeps the Typer command thin and declarative while putting the
@@ -1291,7 +1313,21 @@ def _run_cli(ref_file, hyp_files, outf='', oov_list_f='', isark=False, isctm=Fal
     _validate_cli_paths(ref_file, hyp_files, outf)
     if simple_entity_details_out:
         simple_entity_accuracy = True
-    _validate_cli_options(hyp_files, isark, isctm, oracle_wer, simple_entity_details_out)
+    _validate_cli_options(
+        hyp_files,
+        isark,
+        isctm,
+        oracle_wer,
+        simple_entity_details_out,
+        side_by_side,
+        output_format,
+        skip_detailed,
+        cer,
+        oov_list_f,
+        keywords_f,
+        utt_group_map_f,
+        simple_entity_accuracy,
+    )
 
     logger.remove()
     logger.add(sys.stderr, level='DEBUG' if debug else 'INFO')
@@ -1337,6 +1373,26 @@ def _run_cli(ref_file, hyp_files, outf='', oov_list_f='', isark=False, isctm=Fal
                 simple_entity_accuracy=simple_entity_accuracy,
                 output_format=output_format,
                 simple_entity_details_fh=simple_entity_details_fh,
+            )
+            return
+
+        if side_by_side:
+            ref_utts = read_ref_file(ref_file, isark)
+            hyp_uttsa = read_hyp_file(hyp_files[0], isark, False)
+            hyp_uttsb = read_hyp_file(hyp_files[1], isark, False)
+
+            process_multiple_outputs(
+                ref_utts,
+                hyp_uttsa,
+                hyp_uttsb,
+                fh,
+                num_top_errors,
+                use_chardiff,
+                freq_sort,
+                ref_file,
+                hyp_files[0],
+                hyp_files[1],
+                usecolor=usecolor,
             )
             return
 
@@ -1404,6 +1460,7 @@ def run(
     simple_entity_accuracy: bool = typer.Option(False, '--simple-entity-accuracy', '-w', help='Use simple entity accuracy from reference-side casing cues, matching with whitespace ignored.'),
     simple_entity_details_out: str = typer.Option('', '--entity-details', help='Optional TSV file with one row per entity occurrence and normalized compact model output.'),
     output_format: OutputFormat = typer.Option(OutputFormat.text, '--output-format', help='Output format. JSON contains only aggregate statistics and top-error summaries.'),
+    side_by_side: bool = typer.Option(False, '--side-by-side', '-y', help='For exactly two hypothesis files, print one aligned three-line block per utterance.'),
 ):
     _run_cli(
         ref_file=ref_file,
@@ -1425,6 +1482,7 @@ def run(
         simple_entity_accuracy=simple_entity_accuracy,
         output_format=output_format,
         simple_entity_details_out=simple_entity_details_out,
+        side_by_side=side_by_side,
     )
 
 

@@ -22,6 +22,12 @@ Example of colored detailed output (`--usecolor`):
 
 For more background on the motivation for the tool, see [this post](https://ruabraun.github.io/jekyll/update/2020/11/27/On-word-error-rates.html).
 
+# Changelog
+
+## 1.1.7
+
+- Restored the two-hypothesis per-utterance comparison view behind `--side-by-side` / `-y`.
+
 # Installing
 
 Requires Python 3.9 or newer.
@@ -58,6 +64,12 @@ texterrors --isark -s ref hyp1 hyp2 hyp3
 
 This prints a comparison table with one row per hypothesis file.
 
+Compare two systems in one aligned per-utterance block:
+
+```bash
+texterrors --isark -y ref hyp1 hyp2
+```
+
 Write aggregate-only JSON instead of the normal text report:
 
 ```bash
@@ -93,6 +105,7 @@ Useful output options:
 
 - `--skip-detailed`: show only aggregate statistics
 - `--out`, `-o`: write the text report to a file
+- `--side-by-side`, `-y`: for exactly two hypothesis files, show reference and both hypotheses together per utterance
 - `--output-format json`: write aggregate statistics and top-error summaries as JSON, without per-utterance detail
 - `--entity-details FILE`: write a TSV with one row per simple-entity occurrence
 
