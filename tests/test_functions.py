@@ -6,9 +6,11 @@ import io
 import time
 import sys
 import re
+import pytest
 from loguru import logger
 
 import Levenshtein as levd
+from texterrors import calc_edit_distance_fast
 from texterrors import texterrors
 from texterrors.texterrors import StringVector
 from dataclasses import dataclass
@@ -50,12 +52,21 @@ def test_levd():
         assert d1 == d2, f'{a} {b} {d1} {d2}'
 
 
-# def test_calc_edit_distance_fast():
-#     pairs = ['a', '', '', 'a', 'MOZILLA', 'MUSIAL', 'ARE', 'MOZILLA', 'TURNIPS', 'TENTH', 'POSTERS', 'POSTURE']
-#     for a, b in zip(pairs[:-1:2], pairs[1::2]):
-#         d1 = texterrors.calc_edit_distance_fast(a, b)
-#         d2 = levd.distance(a, b)
-#         assert d1 == d2, f'{a} {b} fasteditdist={d1} ref={d2}'
+@pytest.mark.parametrize('a,b', [
+    ('a', 'bbbb'),
+    ('a', 'b' * 1000),
+    ('bbbb', 'a'),
+    ('MOZILLA', 'MUSIAL'),
+    ('ARE', 'MOZILLA'),
+    ('TURNIPS', 'TENTH'),
+    ('POSTERS', 'POSTURE'),
+    ('same', 'same'),
+    ('', ''),
+    ('a', ''),
+    ('', 'a'),
+])
+def test_calc_edit_distance_fast(a, b):
+    assert calc_edit_distance_fast(a, b) == levd.distance(a, b)
 
 
 def calc_wer(ref, b):

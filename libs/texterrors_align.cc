@@ -164,7 +164,7 @@ int lev_distance_str(std::string a, std::string b) {
 }
 
 int calc_edit_distance_fast_str(std::string a, std::string b) {
-  std::vector<int> buffer(a.size() + b.size() + 2);
+  std::vector<int> buffer(2 * (b.size() + 1));
   return calc_edit_distance_fast(buffer.data(), a.data(), b.data(), a.size(), b.size());
 }
 

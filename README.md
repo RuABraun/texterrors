@@ -24,6 +24,11 @@ For more background on the motivation for the tool, see [this post](https://ruab
 
 # Changelog
 
+## 1.1.9
+
+- Fixed a heap buffer overflow in the Python `calc_edit_distance_fast()` API when the second string is longer than the nonempty first string. The temporary buffer now correctly holds two rows sized to the second string, preventing memory corruption and possible crashes.
+- Added regression coverage for unequal-length and empty inputs. Standard word alignment and character-aware word alignment use separate code paths and were not affected by this overflow.
+
 ## 1.1.8
 
 - Fixed side-by-side output when a hypothesis file is missing an utterance by skipping incomplete utterances before alignment merging.
